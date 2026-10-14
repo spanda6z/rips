@@ -1,0 +1,3 @@
+import {useEffect,useState} from 'react'; import type {Rip} from '../types';
+const KEY='rips-lab-demo-state-v1'; type State={balance:number;inventory:Rip[];history:Rip[]}; const initial:State={balance:1.25,inventory:[],history:[]};
+export function useDemoInventory(){const [state,setState]=useState<State>(()=>{try{const raw=localStorage.getItem(KEY);return raw?{...initial,...JSON.parse(raw)}:initial}catch{return initial}});useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}},[state]);return {...state,spend:(amount:number)=>setState(s=>({...s,balance:Math.max(0,Number((s.balance-amount).toFixed(4)))})),addRip:(rip:Rip)=>setState(s=>({...s,inventory:[rip,...s.inventory],history:[rip,...s.history]})),reset:()=>setState(initial)}}
