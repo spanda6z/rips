@@ -10,8 +10,15 @@ export default function AccountPanel() {
   const [profileBusy, setProfileBusy] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setInterval(() => setCooldown(seconds => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldown > 0]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -49,16 +56,23 @@ export default function AccountPanel() {
 
   async function sendLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabase || busy || cooldown > 0) return;
     setBusy(true); setError(''); setMessage('');
     try {
       const { error: authError } = await supabase.auth.signInWithOtp({
         email: email.trim(), options: { emailRedirectTo: window.location.origin },
       });
       if (authError) throw authError;
-      setMessage('Magic link sent. Check your inbox to finish signing in.');
+      setMessage('Magic link sent. Check your inbox and spam folder. For your security, wait a minute before requesting another link.');
+      setCooldown(60);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send the sign-in link.');
+      const details = cause instanceof Error ? cause.message : 'Could not send the sign-in link.';
+      if (/rate.?limit|rate exceeded|too many requests|email rate/i.test(details)) {
+        setCooldown(60);
+        setError('Supabase has temporarily limited sign-in emails. Please wait a few minutes, then try once. Repeated requests can extend the limit.');
+      } else {
+        setError(details);
+      }
     } finally { setBusy(false); }
   }
 
@@ -99,7 +113,7 @@ export default function AccountPanel() {
           <form className="account-form" onSubmit={sendLink}>
             <label htmlFor="account-email">Email address</label>
             <input id="account-email" type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com"/>
-            <button className="primary wide" type="submit" disabled={busy}><LogIn size={16}/>{busy ? 'Sending link…' : 'Email me a sign-in link'}</button>
+            <button className="primary wide" type="submit" disabled={busy || cooldown > 0}><LogIn size={16}/>{busy ? 'Sending link…' : cooldown > 0 ? `Try again in ${cooldown}s` : 'Email me a sign-in link'}</button>
           </form>
         </>}
         {message && <p className="account-success" role="status">{message}</p>}
