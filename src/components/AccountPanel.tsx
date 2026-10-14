@@ -67,7 +67,7 @@ export default function AccountPanel() {
       setCooldown(60);
     } catch (cause) {
       const details = cause instanceof Error ? cause.message : 'Could not send the sign-in link.';
-      if (/rate.?limit|rate exceeded|too many requests|email rate/i.test(details)) {
+      if (/rate.?limit|rate exceeded|too many requests|email rate|security purposes|only request this after/i.test(details)) {
         setCooldown(60);
         setError('Supabase has temporarily limited sign-in emails. Please wait a few minutes, then try once. Repeated requests can extend the limit.');
       } else {
