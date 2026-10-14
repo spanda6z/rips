@@ -6,6 +6,8 @@ import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 export default function AccountPanel() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [profileBusy, setProfileBusy] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -18,6 +20,32 @@ export default function AccountPanel() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => { alive = false; listener.subscription.unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !session?.user.id) { setDisplayName(''); return; }
+    let active = true;
+    supabase.from('profiles').select('display_name').eq('id', session.user.id).maybeSingle()
+      .then(({ data }) => {
+        if (active && data?.display_name) setDisplayName(data.display_name);
+        else if (active) setDisplayName(session.user.email?.split('@')[0] ?? '');
+      });
+    return () => { active = false; };
+  }, [session?.user.id]);
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !session?.user.id) return;
+    setProfileBusy(true); setError(''); setMessage('');
+    try {
+      const { error: saveError } = await supabase.from('profiles')
+        .update({ display_name: displayName.trim() })
+        .eq('id', session.user.id);
+      if (saveError) throw saveError;
+      setMessage('Profile saved.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save your profile.');
+    } finally { setProfileBusy(false); }
+  }
 
   async function sendLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,8 +88,12 @@ export default function AccountPanel() {
           <div className="notice account-notice"><b>Setup required</b><p>Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> to the deployment environment, then apply the migration in <code>supabase/migrations</code>.</p></div>
         </> : session?.user.email ? <>
           <p className="account-email">{session.user.email}</p>
-          <p>Your account is authenticated. Existing demo inventory remains browser-local until cloud sync is enabled.</p>
-          <button className="primary wide" type="button" disabled={busy} onClick={signOut}><LogOut size={16}/>{busy ? 'Signing out…' : 'Sign out'}</button>
+          <form className="account-form" onSubmit={saveProfile}>
+            <label htmlFor="account-display-name">Display name</label>
+            <input id="account-display-name" maxLength={40} value={displayName} onChange={event => setDisplayName(event.target.value)} placeholder="Your display name" required/>
+            <button className="primary wide" type="submit" disabled={profileBusy}><UserRound size={16}/>{profileBusy ? 'Saving…' : 'Save profile'}</button>
+          </form>
+          <button className="secondary wide" type="button" disabled={busy} onClick={signOut}><LogOut size={16}/>{busy ? 'Signing out…' : 'Sign out'}</button>
         </> : <>
           <p>Sign in with a secure email magic link. No password required.</p>
           <form className="account-form" onSubmit={sendLink}>
