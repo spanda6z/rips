@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Rip, Rarity } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 const KEY = 'rips-lab-demo-state-v1';
 type State = { balance: number; inventory: Rip[]; history: Rip[] };
@@ -40,6 +41,8 @@ function readSavedState(): State {
 
 export function useDemoInventory() {
   const [state, setState] = useState<State>(readSavedState);
+  const [cloudUser, setCloudUser] = useState<string | null>(null);
+  const [cloudReady, setCloudReady] = useState(false);
 
   useEffect(() => {
     try {
@@ -48,6 +51,69 @@ export function useDemoInventory() {
       // Storage can be unavailable or full; the demo still works for this session.
     }
   }, [state]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setCloudUser(data.session?.user.id ?? null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCloudReady(false);
+      setCloudUser(session?.user.id ?? null);
+    });
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !cloudUser) {
+      setCloudReady(false);
+      return;
+    }
+    let active = true;
+    setCloudReady(false);
+    supabase.from('user_collections')
+      .select('demo_balance, items, activity')
+      .eq('user_id', cloudUser)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          // Keep local demo data intact when the migration has not been applied.
+          setCloudReady(false);
+          return;
+        }
+        if (data) {
+          const remoteItems = Array.isArray(data.items) ? data.items.filter(isRip) : [];
+          const remoteActivity = Array.isArray(data.activity) ? data.activity.filter(isRip) : [];
+          const remoteBalance = Number(data.demo_balance);
+          setState({
+            balance: Number.isFinite(remoteBalance) && remoteBalance >= 0 ? remoteBalance : initial.balance,
+            inventory: remoteItems,
+            history: remoteActivity,
+          });
+        }
+        setCloudReady(true);
+      });
+    return () => { active = false; };
+  }, [cloudUser]);
+
+  useEffect(() => {
+    if (!supabase || !cloudUser || !cloudReady) return;
+    const snapshot = {
+      user_id: cloudUser,
+      demo_balance: state.balance,
+      items: state.inventory,
+      activity: state.history,
+    };
+    supabase.from('user_collections').upsert(snapshot, { onConflict: 'user_id' })
+      .then(({ error }) => {
+        if (error) console.warn('RIPS LAB cloud collection sync is unavailable.', error.message);
+      });
+  }, [state, cloudUser, cloudReady]);
 
   return {
     ...state,
