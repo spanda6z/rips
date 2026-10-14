@@ -101,3 +101,21 @@ button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:850px){.inventory-toolbar{grid-template-columns:1fr 1fr}.search-field{grid-column:1/-1}.filter-field select{max-width:none;flex:1}.activity-status{display:none}}
 @media(max-width:480px){.inventory-toolbar{grid-template-columns:1fr}.search-field{grid-column:auto}.filter-field{min-height:40px}.filter-field select{width:100%}.detail-grid{gap:7px}.detail-grid>div{padding:10px}.history{gap:8px}.history strong{font-size:10px}.activity-head>span{font-size:8px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+
+/* Phase 2 account panel */
+.account-trigger{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line,#2c2d36);border-radius:10px;padding:10px 12px;background:var(--panel,#17181f);color:inherit;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.account-trigger:hover{border-color:#8b5cf6}
+.account-modal{width:min(440px,calc(100vw - 32px));text-align:left}
+.account-modal h2{margin:14px 0 10px}
+.account-modal p{line-height:1.65;color:var(--muted,#a1a1aa);font-size:13px}
+.account-email{color:var(--text,#fff)!important;font-weight:700;overflow-wrap:anywhere}
+.account-form{display:grid;gap:9px;margin:18px 0}
+.account-form label{font-size:12px;font-weight:700}
+.account-form input{width:100%;box-sizing:border-box;border:1px solid var(--line,#333);border-radius:10px;padding:12px;background:var(--panel,#17181f);color:inherit;font:inherit}
+.account-form input:focus-visible{outline:2px solid #8b5cf6;outline-offset:2px}
+.account-success{color:#86efac!important}
+.account-notice{margin:14px 0;padding:14px}
+.account-notice p{margin-bottom:0;overflow-wrap:anywhere}
+.account-notice code{font-size:11px}
+@media(max-width:850px){.account-trigger{padding:9px}.account-trigger span{display:none}}
