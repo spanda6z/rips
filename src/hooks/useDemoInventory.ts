@@ -60,6 +60,12 @@ export function useDemoInventory() {
       inventory: [rip, ...s.inventory],
       history: [rip, ...s.history],
     })),
+    openRip: (amount: number, rip: Rip) => setState(s => ({
+      ...s,
+      balance: Math.max(0, Number((s.balance - amount).toFixed(4))),
+      inventory: [rip, ...s.inventory],
+      history: [rip, ...s.history],
+    })),
     reset: () => setState(initial),
   };
 }
