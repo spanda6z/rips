@@ -6,6 +6,11 @@ RIPS LAB is a demo-only token pack experience built with React, TypeScript, Vite
 
 https://rips-lac.vercel.app
 
+## Policies and launch
+
+- [Privacy notice](https://rips-lac.vercel.app/privacy.html)
+- [Launch checklist](./LAUNCH_CHECKLIST.md)
+
 ## Run locally
 
 ```bash
