@@ -4,7 +4,7 @@ Phase 2 introduces the secure account foundation for moving from a browser-only 
 
 ## Included
 - Email magic-link authentication through Supabase Auth.
-- Account panel in the main application.
+- Account panel in the main application with editable display name.
 - Signed-in collection hydration and background sync for demo balance, inventory, and activity.
 - Database migration for profiles, per-user collections/activity, and a pack catalog.
 - Row Level Security and least-privilege grants for exposed tables.
