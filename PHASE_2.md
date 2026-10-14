@@ -5,6 +5,7 @@ Phase 2 introduces the secure account foundation for moving from a browser-only 
 ## Included
 - Email magic-link authentication through Supabase Auth.
 - Account panel in the main application.
+- Signed-in collection hydration and background sync for demo balance, inventory, and activity.
 - Database migration for profiles, per-user collections/activity, and a pack catalog.
 - Row Level Security and least-privilege grants for exposed tables.
 - New-user trigger to create a profile and collection record.
@@ -20,5 +21,5 @@ Phase 2 introduces the secure account foundation for moving from a browser-only 
 ## Security and scope
 - Never put a Supabase service-role or secret key in a `VITE_*` variable.
 - Browser clients cannot write to the pack catalog. Administrative pack editing requires a trusted server/Edge Function and role verification.
-- Existing pack-opening rewards and balances are still demo-only and stored locally in this phase.
+- Pack rewards and balances remain simulated demo data. Signed-in demo collections sync to the database; anonymous sessions remain browser-local.
 - Before any real-value launch, add server-authoritative pack opening, transaction/idempotency protections, RLS tests, rate limits, and automated end-to-end tests.
