@@ -60,6 +60,7 @@ export function useDemoInventory() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setCloudReady(false);
+      setState(initial);
       setCloudUser(session?.user.id ?? null);
     });
     return () => {
