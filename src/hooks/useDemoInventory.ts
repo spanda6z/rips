@@ -56,7 +56,13 @@ export function useDemoInventory() {
     if (!supabase) return;
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
-      if (active) setCloudUser(data.session?.user.id ?? null);
+      if (active) {
+        // Never upload a browser's anonymous/local collection into a signed-in account.
+        // Wait for that account's cloud collection to hydrate before enabling sync.
+        setState(initial);
+        setCloudReady(false);
+        setCloudUser(data.session?.user.id ?? null);
+      }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setCloudReady(false);
