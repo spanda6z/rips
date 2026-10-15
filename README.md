@@ -1,54 +1,56 @@
-# RIPS LAB
+# RIPS
 
-**Production demo v1.0.0** — a simulated token-pack experience built with React, TypeScript, Vite, and Supabase.
+**v2.0.0 — Solana pack shop (real SOL payments)**
 
-**It does not sell tokens or provide real assets, investment products, wallets, or blockchain transactions.**
+Open packs by paying the treasury in SOL from your wallet. The server verifies the on-chain transfer, rolls the reward, and stores your collection.
 
-## Live
+## Stack
 
-https://rips-lac.vercel.app
+- React + Vite + TypeScript
+- Solana wallet adapter (Phantom, Solflare)
+- Supabase Auth + RLS inventory
+- Edge Function `open-pack-sol` (payment verify + pack open)
 
-## Features
+## Configure
 
-- Pack shop with published rarity odds and simulated SOL balance
-- Inventory (search, rarity filters, sort, CSV export, activity)
-- Achievements
-- Demo leaderboard (live aggregates when migration is applied)
-- Email magic-link auth + cloud collection sync (RLS)
-- Server-authoritative pack opens for signed-in users (`open-pack` Edge Function)
-- Privacy notice and production runbook
+```bash
+cp .env.example .env
+```
 
-## Docs
-
-| Doc | Purpose |
+| Variable | Purpose |
 | --- | --- |
-| [PRODUCTION.md](./PRODUCTION.md) | Deploy + smoke-test runbook |
-| [LAUNCH_CHECKLIST.md](./LAUNCH_CHECKLIST.md) | Pre-announce checklist |
-| [PHASE_2.md](./PHASE_2.md) | Accounts foundation |
-| [PHASE_3.md](./PHASE_3.md) | Server opens + leaderboard |
-| [Privacy](https://rips-lac.vercel.app/privacy.html) | Privacy notice |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` | Auth + inventory |
+| `VITE_SOLANA_NETWORK` | `devnet` or `mainnet-beta` |
+| `VITE_SOLANA_RPC_URL` | Optional private RPC |
+| `VITE_TREASURY_WALLET` | Base58 pubkey that receives pack SOL |
+
+**Edge Function secrets (Supabase):** `SOLANA_RPC_URL`, `TREASURY_WALLET` (same pubkey).
+
+## Deploy
+
+1. Run SQL migrations (Phase 2 accounts + pack seed + leaderboard + `202610150003_solana_payments.sql`).
+2. `supabase functions deploy open-pack-sol`
+3. Set function secrets for RPC + treasury.
+4. Set Vercel env vars (including treasury + network).
+5. Start on **devnet**, fund a test wallet, buy a pack end-to-end before mainnet.
+
+## Flow
+
+1. Sign in (magic link).
+2. Connect wallet.
+3. Open pack → sign SOL transfer to treasury (memo binds pack + buyer).
+4. Client sends signature to `open-pack-sol`.
+5. Server confirms transfer amount + accounts, rolls rarity, writes inventory.
 
 ## Local
 
 ```bash
 npm install
-cp .env.example .env   # VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY
 npm run dev
 ```
 
-```bash
-npm test
-npm run build
-```
+## Notes
 
-## Production deploy (summary)
-
-1. Run all SQL migrations in Supabase.
-2. `supabase functions deploy open-pack`
-3. Set Vercel env vars (publishable key only).
-4. Point Supabase Auth Site URL + redirects at the production domain.
-5. Walk through `PRODUCTION.md` smoke tests.
-
-## Boundary
-
-This is a **demo launch**. No payments, no real wallets, no redeemable balances. Any on-chain or real-money product is a separate track.
+- Inventory items are **off-chain records** after a real SOL payment (not NFT mints yet).
+- NFT / SPL mint on open can be added as a follow-up program.
+- Never put the Supabase **service role** key in `VITE_*` vars.

@@ -1,7 +1,7 @@
 {
-  "name": "rips-lab",
+  "name": "rips",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -11,7 +11,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-wallets": "^0.19.37",
+    "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.57.0",
+    "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -22,6 +29,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
+    "vite-plugin-node-polyfills": "^0.22.0",
     "vitest": "^2.1.5"
   }
 }
