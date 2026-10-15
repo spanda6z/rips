@@ -1,0 +1,7 @@
+.wallet-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.network-chip{font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:4px 8px;border-radius:999px;border:1px solid #38334f;color:#a8adc2;background:#12141f}
+.wallet-warn{font-size:12px;color:#ffb4a8}
+.wallet-bar .wallet-adapter-button{height:36px!important;border-radius:10px!important;font-size:13px!important}
+.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pay-busy{opacity:.7;pointer-events:none}
+.banner.info{background:#1a2030;border-color:#3d4a6a;color:#c5d0f0}
