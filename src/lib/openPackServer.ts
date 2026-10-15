@@ -3,7 +3,48 @@ import type { Rip } from '../types';
 
 export type OpenPackResult =
   | { ok: true; rip: Rip; balance: number; inventoryCount: number }
-  | { ok: false; error: string; status: number; balance?: number; price?: number; retryAfterMs?: number };
+  | {
+      ok: false;
+      error: string;
+      status: number;
+      balance?: number;
+      price?: number;
+      retryAfterMs?: number;
+    };
+
+async function readFunctionError(error: unknown): Promise<{ message: string; status: number; body?: Record<string, unknown> }> {
+  const fallback = { message: 'Server open failed', status: 500 as number };
+  if (!error || typeof error !== 'object') return fallback;
+
+  const err = error as {
+    message?: string;
+    context?: Response | { status?: number; json?: () => Promise<unknown>; body?: unknown };
+  };
+
+  let status = 500;
+  let body: Record<string, unknown> | undefined;
+  const ctx = err.context;
+
+  if (ctx && typeof ctx === 'object') {
+    if (typeof (ctx as Response).status === 'number') status = (ctx as Response).status;
+    if (typeof (ctx as { status?: number }).status === 'number') status = (ctx as { status: number }).status;
+    if (typeof (ctx as Response).json === 'function') {
+      try {
+        const parsed = await (ctx as Response).json();
+        if (parsed && typeof parsed === 'object') body = parsed as Record<string, unknown>;
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }
+
+  const message =
+    (body && typeof body.error === 'string' && body.error) ||
+    (typeof err.message === 'string' && err.message) ||
+    fallback.message;
+
+  return { message, status, body };
+}
 
 /**
  * Server-authoritative pack open for signed-in users.
@@ -25,14 +66,15 @@ export async function openPackServer(packId: string): Promise<OpenPackResult> {
   });
 
   if (error) {
-    // functions.invoke puts non-2xx bodies in error.context sometimes
-    const msg = error.message || 'Server open failed';
-    // Try to surface status from context if present
-    const status =
-      typeof (error as { context?: { status?: number } }).context?.status === 'number'
-        ? (error as { context: { status: number } }).context.status
-        : 500;
-    return { ok: false, error: msg, status };
+    const parsed = await readFunctionError(error);
+    return {
+      ok: false,
+      error: parsed.message,
+      status: parsed.status,
+      balance: typeof parsed.body?.balance === 'number' ? parsed.body.balance : undefined,
+      price: typeof parsed.body?.price === 'number' ? parsed.body.price : undefined,
+      retryAfterMs: typeof parsed.body?.retryAfterMs === 'number' ? parsed.body.retryAfterMs : undefined,
+    };
   }
 
   if (!data || typeof data !== 'object') {
