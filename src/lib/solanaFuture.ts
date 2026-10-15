@@ -1,22 +1,17 @@
 /**
- * Future Solana integration scaffold.
- *
- * RIPS LAB is currently demo-only. This module exists so the team can
- * experiment with wallet UI patterns without enabling real transactions.
- *
- * DO NOT wire this to actual transfers, mints, or payments until a full
- * security + legal review is complete.
+ * @deprecated v2 uses real Solana payments via solanaConfig / solanaPay / openPackSolana.
+ * Kept so old imports do not break; SOLANA_MODE is always live when treasury is set.
  */
+import { isSolanaConfigured } from './solanaConfig';
 
-export type SolanaMode = 'demo' | 'preview' | 'disabled';
+export type SolanaMode = 'live' | 'disabled';
 
-export const SOLANA_MODE: SolanaMode = 'disabled';
+export const SOLANA_MODE: SolanaMode = isSolanaConfigured ? 'live' : 'disabled';
 
 export function isSolanaPreviewEnabled(): boolean {
-  return SOLANA_MODE === 'preview';
+  return isSolanaConfigured;
 }
 
-/** Placeholder — never call a real RPC or sign a transaction from here in the current release. */
 export async function getPreviewWalletStatus(): Promise<{
   connected: boolean;
   address: string | null;
@@ -25,6 +20,8 @@ export async function getPreviewWalletStatus(): Promise<{
   return {
     connected: false,
     address: null,
-    note: 'Solana wallet integration is intentionally disabled in this demo release.',
+    note: isSolanaConfigured
+      ? 'Use the wallet adapter button to connect.'
+      : 'Set VITE_TREASURY_WALLET to enable Solana payments.',
   };
 }
