@@ -127,3 +127,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
 
 /* Collection rarity overview */
 .rarity-overview{margin:22px 0 8px;padding:17px 18px;background:#11131f;border:1px solid var(--line);border-radius:13px}.rarity-overview .activity-head{margin:0 0 14px}.rarity-stack{display:flex;gap:4px;height:9px;overflow:hidden;border-radius:99px;background:#252738}.rarity-segment{height:100%;border-radius:99px;transition:width .2s ease}.rarity-legend{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}.rarity-legend>div{display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:7px;min-width:0;font-size:10px;color:var(--muted)}.rarity-legend i{width:7px;height:7px;border-radius:50%}.rarity-legend b{color:#f4f2ff;font:11px 'DM Mono',monospace}@media(max-width:600px){.rarity-overview{padding:14px}.rarity-legend{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}}
+
+
+/* Interactive rarity legend in My Rips */
+.rarity-legend-item{appearance:none;display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;gap:7px;min-width:0;padding:7px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;text-align:left;cursor:pointer;transition:background .16s ease,border-color .16s ease}
+.rarity-legend-item i{width:7px;height:7px;border-radius:50%}
+.rarity-legend-item b{color:#f4f2ff;font:11px 'DM Mono',monospace}
+.rarity-legend-item small{grid-column:2/-1;color:#74788e;font:8px 'DM Mono',monospace}
+.rarity-legend-item:hover,.rarity-legend-item.selected{background:#1a1b2b;border-color:#40385f;color:#f4f2ff}
+.rarity-legend-item:focus-visible{outline:2px solid #b5a8ff;outline-offset:2px}
+@media(max-width:600px){.rarity-legend-item{padding:6px}}
