@@ -1,52 +1,30 @@
-# RIPS LAB — Phase 3 Foundation
+# RIPS LAB — Phase 3
 
-Phase 3 moves the demo toward a more robust multi-user experience while keeping the **demo-only** boundary clear. Real-value or transferable assets remain out of scope until a separate security, legal, and operational review.
-
-## Status (v0.4.1)
+## Status (v1.0.0 production demo)
 
 | Piece | Status |
 | --- | --- |
-| Server-authoritative pack open (`open-pack` Edge Function) | Implemented |
-| Client uses Edge Function when signed in + collection hydrated | Implemented |
-| Pack catalog seed migration | Implemented |
-| Optimistic concurrency on balance | Implemented |
-| Light rate limit between opens | Implemented |
-| Signed-in leaderboard | Planned |
-| Full RPC lock / service-role path | Optional hardening |
+| Server-authoritative pack open | Implemented + deployed code on `main` |
+| Client signed-in path | Implemented |
+| Pack catalog seed | Implemented |
+| Optimistic concurrency | Implemented |
+| Open rate limit | Implemented |
+| Demo leaderboard RPC | Implemented (`demo_leaderboard`) |
+| Client leaderboard UI | Implemented (live + fictional fallback) |
 
-## Deploy the Edge Function
-
-1. Install Supabase CLI and link the project.
-2. Run migrations (Phase 2 accounts + Phase 3 pack seed) in the SQL Editor or via CLI.
-3. Deploy:
+## Deploy
 
 ```bash
+# Migrations (SQL Editor or CLI)
+# 202610140001_phase2_accounts.sql
+# 202610150001_phase3_pack_seed.sql
+# 202610150002_phase3_leaderboard.sql
+
 supabase functions deploy open-pack
 ```
 
-4. Confirm the function is reachable from the browser (signed-in user opens a pack).
-5. Anonymous / local demo still uses the client-side pack engine.
+See [PRODUCTION.md](./PRODUCTION.md).
 
-## How opens work
+## Non-goals
 
-**Signed in (cloud ready)**  
-Client → `supabase.functions.invoke('open-pack')` → auth check → load pack (DB or defaults) → balance check → rate limit → roll reward → update `user_collections` under RLS → return Rip.
-
-**Anonymous / local**  
-Client → `chooseReward` + local state (unchanged).
-
-## Goals still open
-
-1. Signed-in leaderboard (RPC or view over `user_collections`).
-2. Stronger concurrency (SECURITY DEFINER function with row lock).
-3. Structured logging / metrics on opens.
-4. Admin-only pack catalog writes.
-
-## Explicit non-goals
-
-- Accepting payments
-- Minting real NFTs or tokens
-- Wallet connections that move real assets
-- Promising redeemable value for demo balances
-
-Any future real Solana integration must be a separate product track with its own security review.
+Payments, real NFTs/tokens, wallet transfers, redeemable value.

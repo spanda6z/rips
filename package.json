@@ -1,14 +1,14 @@
 {
   "name": "rips-lab",
   "private": true,
-  "version": "0.4.1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vitest run && tsc -b && vite build",
+    "build": "vitest run && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

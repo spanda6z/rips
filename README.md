@@ -1,77 +1,54 @@
 # RIPS LAB
 
-RIPS LAB is a **demo-only** token pack experience built with React, TypeScript, Vite, and Supabase. It simulates opening packs and collecting items.
+**Production demo v1.0.0** — a simulated token-pack experience built with React, TypeScript, Vite, and Supabase.
 
 **It does not sell tokens or provide real assets, investment products, wallets, or blockchain transactions.**
 
-## Live demo
+## Live
 
 https://rips-lac.vercel.app
 
-## What’s included
+## Features
 
-- Pack shop with rarity odds and simulated SOL balance
-- Inventory with search, rarity filters, sorting, and activity log
-- Achievements / milestones
-- Demo leaderboard
-- Email magic-link authentication (Supabase)
-- Per-user cloud collection sync with Row Level Security
-- CSV export of inventory
-- Responsive layout + privacy notice
+- Pack shop with published rarity odds and simulated SOL balance
+- Inventory (search, rarity filters, sort, CSV export, activity)
+- Achievements
+- Demo leaderboard (live aggregates when migration is applied)
+- Email magic-link auth + cloud collection sync (RLS)
+- Server-authoritative pack opens for signed-in users (`open-pack` Edge Function)
+- Privacy notice and production runbook
 
-## Policies and launch
+## Docs
 
-- [Privacy notice](https://rips-lac.vercel.app/privacy.html)
-- [Launch checklist](./LAUNCH_CHECKLIST.md)
-- [Phase 2 — Accounts](./PHASE_2.md)
-- [Phase 3 — Foundation](./PHASE_3.md)
+| Doc | Purpose |
+| --- | --- |
+| [PRODUCTION.md](./PRODUCTION.md) | Deploy + smoke-test runbook |
+| [LAUNCH_CHECKLIST.md](./LAUNCH_CHECKLIST.md) | Pre-announce checklist |
+| [PHASE_2.md](./PHASE_2.md) | Accounts foundation |
+| [PHASE_3.md](./PHASE_3.md) | Server opens + leaderboard |
+| [Privacy](https://rips-lac.vercel.app/privacy.html) | Privacy notice |
 
-## Run locally
+## Local
 
 ```bash
 npm install
-cp .env.example .env   # fill VITE_SUPABASE_* if you want cloud features
+cp .env.example .env   # VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY
 npm run dev
 ```
-
-## Quality checks
 
 ```bash
 npm test
 npm run build
 ```
 
-The pack engine tests cover rarity odds validation, deterministic reward selection, missing rarity pools, and configured reward ranges.
+## Production deploy (summary)
 
-## Production configuration
+1. Run all SQL migrations in Supabase.
+2. `supabase functions deploy open-pack`
+3. Set Vercel env vars (publishable key only).
+4. Point Supabase Auth Site URL + redirects at the production domain.
+5. Walk through `PRODUCTION.md` smoke tests.
 
-Configure these in Vercel for Production, Preview, and Development as needed:
+## Boundary
 
-- `VITE_SUPABASE_URL` — Supabase project URL
-- `VITE_SUPABASE_PUBLISHABLE_KEY` — Supabase publishable / anon key
-
-**Never put a Supabase secret or service-role key in frontend code, GitHub, or any `VITE_*` variable.** Keep database access protected by Row Level Security (RLS).
-
-In Supabase Authentication, configure the production site URL and allowed redirect URLs to include the deployed RIPS LAB domain.
-
-## Phase 3 — server opens
-
-Signed-in users open packs through the `open-pack` Supabase Edge Function (balance, roll, and inventory update happen on the server under RLS). Anonymous sessions still use the local demo engine.
-
-```bash
-# After linking the Supabase project:
-supabase db push   # or run migrations in SQL Editor
-supabase functions deploy open-pack
-```
-
-See [PHASE_3.md](./PHASE_3.md).
-
-## Important boundary
-
-This release is for a **demo launch only**. Do not accept payments, promise redeemable value, or represent demo balances and collectibles as real assets.
-
-Any future real-money, transferable-asset, or on-chain Solana functionality requires a separate security, legal, and operational review. See `PHASE_3.md` for the recommended foundation work before that track.
-
-## Version
-
-0.4.1 — server-authoritative pack opens (Edge Function) for signed-in users; pack catalog seed; expanded catalog.
+This is a **demo launch**. No payments, no real wallets, no redeemable balances. Any on-chain or real-money product is a separate track.
