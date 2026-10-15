@@ -80,9 +80,11 @@ export function useDemoInventory() {
         setState(initial);
         setCloudUser(userId);
       } else if (event === 'SIGNED_OUT') {
+        // Do not restore localStorage here: while signed in it may contain that
+        // account's cloud snapshot. Clear the in-memory view to prevent account leakage.
         setCloudReady(false);
         setCloudUser(null);
-        setState(readSavedState());
+        setState(initial);
       } else if (userId) {
         setCloudUser(userId);
       }
