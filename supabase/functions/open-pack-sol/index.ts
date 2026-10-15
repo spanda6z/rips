@@ -1,0 +1,250 @@
+// RIPS — verify on-chain SOL payment, then open pack (server roll + inventory).
+// Deploy: supabase functions deploy open-pack-sol
+// Secrets: SOLANA_RPC_URL, TREASURY_WALLET (same pubkey as VITE_TREASURY_WALLET)
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  Connection,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+} from 'https://esm.sh/@solana/web3.js@1.98.4';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
+};
+
+type Rarity = 'Common' | 'Rare' | 'Epic' | 'Legendary';
+type Token = {
+  id: string;
+  ticker: string;
+  name: string;
+  rarity: Rarity;
+  color: string;
+  icon: string;
+  demoValue: number;
+};
+type PackOdds = Record<Rarity, number>;
+
+const RARITY_ORDER: Rarity[] = ['Common', 'Rare', 'Epic', 'Legendary'];
+const MAX_ACTIVITY = 200;
+
+const PACK_PRICE_SOL: Record<string, number> = {
+  starter: 0.05,
+  degen: 0.15,
+  legend: 0.4,
+  alpha: 0.75,
+};
+
+const DEFAULT_TOKENS: Token[] = [
+  { id: 'sol', ticker: 'SOL', name: 'Solana', rarity: 'Common', color: '#7c6cff', icon: '◎', demoValue: 0.12 },
+  { id: 'bonk', ticker: 'BONK', name: 'Bonk', rarity: 'Common', color: '#f5a623', icon: '🐕', demoValue: 0.08 },
+  { id: 'usdc', ticker: 'USDC', name: 'USD Coin', rarity: 'Common', color: '#2775ca', icon: '$', demoValue: 0.05 },
+  { id: 'mngo', ticker: 'MNGO', name: 'Mango', rarity: 'Common', color: '#f2c94c', icon: '🥭', demoValue: 0.09 },
+  { id: 'wif', ticker: 'WIF', name: 'dogwifhat', rarity: 'Rare', color: '#d58cff', icon: '🐶', demoValue: 0.28 },
+  { id: 'jup', ticker: 'JUP', name: 'Jupiter', rarity: 'Rare', color: '#c5f467', icon: '🚀', demoValue: 0.36 },
+  { id: 'orca', ticker: 'ORCA', name: 'Orca', rarity: 'Rare', color: '#00d1c1', icon: '🐋', demoValue: 0.31 },
+  { id: 'render', ticker: 'RENDER', name: 'Render', rarity: 'Rare', color: '#6c5ce7', icon: '🖥', demoValue: 0.42 },
+  { id: 'pyth', ticker: 'PYTH', name: 'Pyth Network', rarity: 'Epic', color: '#8ce7ff', icon: '✦', demoValue: 0.75 },
+  { id: 'ray', ticker: 'RAY', name: 'Raydium', rarity: 'Epic', color: '#ff7cba', icon: '☉', demoValue: 0.92 },
+  { id: 'jito', ticker: 'JITO', name: 'Jito', rarity: 'Epic', color: '#00ffa3', icon: '⚡', demoValue: 1.15 },
+  { id: 'tensor', ticker: 'TNSR', name: 'Tensor', rarity: 'Epic', color: '#a78bfa', icon: '📦', demoValue: 0.88 },
+  { id: 'mythic', ticker: 'MYTH', name: 'Mythic Drop', rarity: 'Legendary', color: '#ffe07a', icon: '✹', demoValue: 2.5 },
+  { id: 'genesis', ticker: 'GEN', name: 'Genesis Relic', rarity: 'Legendary', color: '#ff9c6e', icon: '◈', demoValue: 4.2 },
+  { id: 'alpha', ticker: 'ALPHA', name: 'Alpha Core', rarity: 'Legendary', color: '#ff6b6b', icon: '▲', demoValue: 3.8 },
+];
+
+const DEFAULT_PACKS: Record<string, { name: string; odds: PackOdds }> = {
+  starter: { name: 'Starter Pack', odds: { Common: 65, Rare: 25, Epic: 8, Legendary: 2 } },
+  degen: { name: 'Degen Pack', odds: { Common: 45, Rare: 32, Epic: 18, Legendary: 5 } },
+  legend: { name: 'Legend Pack', odds: { Common: 20, Rare: 35, Epic: 32, Legendary: 13 } },
+  alpha: { name: 'Alpha Pack', odds: { Common: 10, Rare: 30, Epic: 40, Legendary: 20 } },
+};
+
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function chooseReward(odds: PackOdds): Token {
+  const roll = Math.random() * 100;
+  let cumulative = 0;
+  let rarity: Rarity = 'Common';
+  for (const r of RARITY_ORDER) {
+    cumulative += odds[r] ?? 0;
+    if (roll < cumulative) {
+      rarity = r;
+      break;
+    }
+  }
+  const pool = DEFAULT_TOKENS.filter((t) => t.rarity === rarity);
+  if (!pool.length) throw new Error(`No tokens for ${rarity}`);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
+
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) return json(401, { error: 'Missing authorization' });
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const rpc = Deno.env.get('SOLANA_RPC_URL') ?? 'https://api.devnet.solana.com';
+    const treasuryStr = Deno.env.get('TREASURY_WALLET') ?? '';
+    if (!supabaseUrl || !anonKey || !treasuryStr) {
+      return json(500, { error: 'Server misconfigured (Supabase or TREASURY_WALLET)' });
+    }
+    let treasury: PublicKey;
+    try {
+      treasury = new PublicKey(treasuryStr);
+    } catch {
+      return json(500, { error: 'Invalid TREASURY_WALLET' });
+    }
+
+    const supabase = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) return json(401, { error: 'Unauthorized' });
+
+    const body = await req.json().catch(() => ({}));
+    const packId = typeof body.packId === 'string' ? body.packId.trim() : '';
+    const signature = typeof body.signature === 'string' ? body.signature.trim() : '';
+    const buyerStr = typeof body.buyer === 'string' ? body.buyer.trim() : '';
+    if (!packId || !signature || !buyerStr) {
+      return json(400, { error: 'packId, signature, and buyer required' });
+    }
+
+    const pack = DEFAULT_PACKS[packId];
+    const priceSol = PACK_PRICE_SOL[packId];
+    if (!pack || !priceSol) return json(404, { error: 'Unknown pack' });
+
+    let buyer: PublicKey;
+    try {
+      buyer = new PublicKey(buyerStr);
+    } catch {
+      return json(400, { error: 'Invalid buyer pubkey' });
+    }
+
+    const { data: existingPay } = await supabase
+      .from('pack_payments')
+      .select('id')
+      .eq('signature', signature)
+      .maybeSingle();
+    if (existingPay) {
+      return json(409, { error: 'Payment signature already used' });
+    }
+
+    const connection = new Connection(rpc, 'confirmed');
+    const tx = await connection.getTransaction(signature, {
+      maxSupportedTransactionVersion: 0,
+      commitment: 'confirmed',
+    });
+    if (!tx || !tx.meta || tx.meta.err) {
+      return json(402, { error: 'Transaction not found or failed on-chain' });
+    }
+
+    const pre = tx.meta.preBalances;
+    const post = tx.meta.postBalances;
+    const accountKeys =
+      typeof tx.transaction.message.getAccountKeys === 'function'
+        ? tx.transaction.message.getAccountKeys({
+            accountKeysFromLookups: tx.meta.loadedAddresses,
+          }).staticAccountKeys
+        : (tx.transaction.message as { accountKeys?: PublicKey[] }).accountKeys ?? [];
+
+    const keyStrs = accountKeys.map((k: PublicKey) =>
+      typeof k.toBase58 === 'function' ? k.toBase58() : String(k),
+    );
+    const buyerIdx = keyStrs.indexOf(buyer.toBase58());
+    const treasuryIdx = keyStrs.indexOf(treasury.toBase58());
+    if (buyerIdx < 0 || treasuryIdx < 0) {
+      return json(402, { error: 'Payment does not involve buyer and treasury' });
+    }
+    const received =
+      (pre[treasuryIdx] ?? 0) < (post[treasuryIdx] ?? 0)
+        ? post[treasuryIdx] - pre[treasuryIdx]
+        : 0;
+    const minLamports = Math.round(priceSol * LAMPORTS_PER_SOL * 0.99);
+    if (received < minLamports) {
+      return json(402, {
+        error: 'Insufficient SOL transferred to treasury',
+        received,
+        required: minLamports,
+      });
+    }
+
+    const logs = tx.meta.logMessages ?? [];
+    const memoOk = logs.some((l: string) => l.includes(packId) && l.includes(buyer.toBase58()));
+
+    const token = chooseReward(pack.odds);
+    const rip = {
+      id: crypto.randomUUID(),
+      token,
+      packName: pack.name,
+      openedAt: new Date().toISOString(),
+      paymentSignature: signature,
+      buyer: buyer.toBase58(),
+    };
+
+    let { data: collection } = await supabase
+      .from('user_collections')
+      .select('id,user_id,demo_balance,items,activity')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!collection) {
+      const { data: created, error: createError } = await supabase
+        .from('user_collections')
+        .insert({ user_id: user.id })
+        .select('id,user_id,demo_balance,items,activity')
+        .single();
+      if (createError || !created) {
+        return json(500, { error: 'Could not create collection' });
+      }
+      collection = created;
+    }
+
+    const items = Array.isArray(collection.items) ? collection.items : [];
+    const activity = Array.isArray(collection.activity) ? collection.activity : [];
+    const nextItems = [rip, ...items];
+    const nextActivity = [rip, ...activity].slice(0, MAX_ACTIVITY);
+
+    const { error: updateError } = await supabase
+      .from('user_collections')
+      .update({ items: nextItems, activity: nextActivity })
+      .eq('user_id', user.id);
+    if (updateError) {
+      return json(500, { error: 'Could not update collection' });
+    }
+
+    await supabase.from('pack_payments').insert({
+      user_id: user.id,
+      signature,
+      pack_id: packId,
+      buyer: buyer.toBase58(),
+      lamports: received,
+      memo_matched: memoOk,
+    });
+
+    return json(200, {
+      ok: true,
+      rip,
+      signature,
+      paidLamports: received,
+      inventoryCount: nextItems.length,
+    });
+  } catch (err) {
+    console.error('open-pack-sol', err);
+    return json(500, { error: err instanceof Error ? err.message : String(err) });
+  }
+});
