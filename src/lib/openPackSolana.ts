@@ -54,15 +54,18 @@ export async function openPackWithSol(params: {
     });
 
     status('Confirming on Solana…');
-    const latest = await connection.getLatestBlockhash('confirmed');
-    await connection.confirmTransaction(
-      {
-        signature,
-        blockhash: latest.blockhash,
-        lastValidBlockHeight: latest.lastValidBlockHeight,
-      },
+    const blockhash = tx.recentBlockhash;
+    const lastValidBlockHeight = tx.lastValidBlockHeight;
+    if (!blockhash || typeof lastValidBlockHeight !== 'number') {
+      return { ok: false, error: `Could not verify the payment confirmation details. If SOL left your wallet, contact support with signature: ${signature}` };
+    }
+    const confirmation = await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
       'confirmed',
     );
+    if (confirmation.value.err) {
+      return { ok: false, error: `Solana did not confirm this payment successfully. If SOL left your wallet, contact support with signature: ${signature}` };
+    }
 
     status('Verifying payment and opening pack…');
     const { data, error } = await supabase.functions.invoke('open-pack-sol', {
