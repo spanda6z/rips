@@ -194,6 +194,20 @@ Deno.serve(async (req) => {
       return json(402, { error: 'Payment memo does not match this buyer and pack' });
     }
 
+    // Claim the payment signature before granting any collectible. The database's
+    // unique signature constraint prevents concurrent requests from redeeming one tx twice.
+    const { error: paymentInsertError } = await supabase.from('pack_payments').insert({
+      user_id: user.id,
+      signature,
+      pack_id: packId,
+      buyer: buyerAddress,
+      lamports: received,
+      memo_matched: memoOk,
+    });
+    if (paymentInsertError) {
+      return json(409, { error: 'This payment could not be claimed (it may already have been used). If SOL left your wallet, contact support with your transaction signature.' });
+    }
+
     const token = chooseReward(pack.odds);
     const rip = {
       id: crypto.randomUUID(),
@@ -233,19 +247,6 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id);
     if (updateError) {
       return json(500, { error: 'Could not update collection' });
-    }
-
-    const { error: paymentInsertError } = await supabase.from('pack_payments').insert({
-      user_id: user.id,
-      signature,
-      pack_id: packId,
-      buyer: buyerAddress,
-      lamports: received,
-      memo_matched: memoOk,
-    });
-    if (paymentInsertError) {
-      console.error('Could not record verified pack payment', paymentInsertError.message);
-      return json(500, { error: 'Pack was added, but payment recording failed. Contact support with your transaction signature.' });
     }
 
     return json(200, {
