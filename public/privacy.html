@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090b12">
-  <meta name="description" content="Privacy notice for the RIPS LAB demo experience.">
-  <title>Privacy Notice — RIPS LAB</title>
+  <meta name="description" content="Privacy notice for RIPS Solana pack shop.">
+  <title>Privacy Notice — RIPS</title>
   <style>
     :root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#090b12;color:#f4f2ff}
     body{margin:0;padding:32px 18px;line-height:1.7}
@@ -20,46 +20,31 @@
 </head>
 <body>
 <main>
-  <p><a href="/">← Back to RIPS LAB</a></p>
+  <p><a href="/">← Back to RIPS</a></p>
   <h1>Privacy notice</h1>
   <p>Last updated: October 15, 2026</p>
-  <p>RIPS LAB is a <strong>demo-only</strong> token-pack experience. It does not issue real tokens, hold funds, connect wallets, accept payments, or submit blockchain transactions.</p>
+  <p>RIPS is a Solana pack product. Users may connect a wallet and pay <strong>real SOL</strong> to a project treasury to open packs. Collection items are recorded in your account after payment verification. NFT or SPL minting may be added in a later release.</p>
 
   <div class="note">
-    Demo balances and collectibles are simulated. They have no market price and are not redeemable for money, tokens, or other value.
+    Pack opens require an on-chain SOL transfer. Inventory entries are account records tied to verified payments. Unless an NFT/SPL mint is enabled, collectibles are not automatically transferable on-chain.
   </div>
 
   <h2>Information that may be stored</h2>
   <ul>
-    <li><strong>Without signing in:</strong> simulated balance, collected demo items, and activity history stay in your browser’s local storage.</li>
-    <li><strong>When you sign in:</strong> Supabase Authentication processes your email and session. RIPS LAB may store your display name, simulated balance, demo collection, and activity so the demo can follow your account across devices.</li>
-    <li><strong>Leaderboard (demo):</strong> a public aggregate of display name, item count, and simulated collection value may be shown. Email addresses are not published.</li>
-    <li><strong>Technical data:</strong> hosting and auth providers may process logs and diagnostics needed to run and secure the service under their policies.</li>
+    <li><strong>Without signing in:</strong> browser local storage may hold temporary UI state.</li>
+    <li><strong>When you sign in:</strong> email/session via Supabase; display name; wallet public key; collection; activity; payment signatures.</li>
+    <li><strong>Leaderboard:</strong> display name, item counts, and estimated collection value may be shown publicly. Emails are not published.</li>
+    <li><strong>On-chain:</strong> SOL transfers and memos are public on Solana by design.</li>
+    <li><strong>Technical data:</strong> hosting and auth providers process logs needed to run and secure the service.</li>
   </ul>
 
   <h2>How information is used</h2>
-  <p>Information is used only to sign you in, show your profile, save your simulated collection, operate the demo leaderboard, and keep the service secure. It is not sold.</p>
-
-  <h2>Storage and sharing</h2>
-  <p>Anonymous data stays in the browser. Signed-in data is stored in the project’s Supabase database with Row Level Security so each account only reaches its own collection and profile. The hosting provider (for example Vercel) processes requests to serve the site.</p>
-
-  <h2>Retention</h2>
-  <p>Local storage remains until you clear site data or reset the demo. Signed-in records remain until you request deletion or the project is shut down.</p>
-
-  <h2>Your choices</h2>
-  <ul>
-    <li>Use the demo without creating an account.</li>
-    <li>Sign out at any time.</li>
-    <li>Reset local demo data from the app.</li>
-    <li>Request deletion of a signed-in account’s stored demo data via the contact address below.</li>
-  </ul>
+  <p>To authenticate you, verify pack payments, store your collection, operate leaderboards, and secure the product. It is not sold.</p>
 
   <h2>Contact</h2>
-  <p>Questions or deletion requests: <a href="mailto:support@rips.lab">support@rips.lab</a> (replace with your real support inbox before a public launch).</p>
+  <p>Questions or deletion requests: <a href="mailto:support@rips.lab">support@rips.lab</a> (replace with your real support inbox).</p>
 
-  <footer>
-    RIPS LAB demo · Not financial advice · No real assets
-  </footer>
+  <footer>RIPS · Solana packs · Not financial advice</footer>
 </main>
 </body>
 </html>
