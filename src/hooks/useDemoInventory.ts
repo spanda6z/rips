@@ -11,14 +11,28 @@ function isRip(value: unknown): value is Rip {
   if (!value || typeof value !== 'object') return false;
   const rip = value as Partial<Rip>;
   const token = rip.token;
-  if (!rip.id || typeof rip.id !== 'string' || typeof rip.packName !== 'string' ||
-      typeof rip.openedAt !== 'string' || !token || typeof token !== 'object') return false;
+  if (
+    !rip.id ||
+    typeof rip.id !== 'string' ||
+    typeof rip.packName !== 'string' ||
+    typeof rip.openedAt !== 'string' ||
+    !token ||
+    typeof token !== 'object'
+  ) {
+    return false;
+  }
   const item = token as Partial<Rip['token']>;
-  return typeof item.id === 'string' && typeof item.name === 'string' &&
-    typeof item.ticker === 'string' && typeof item.color === 'string' &&
-    typeof item.icon === 'string' && typeof item.demoValue === 'number' &&
-    Number.isFinite(item.demoValue) && item.demoValue >= 0 &&
-    rarities.includes(item.rarity as Rarity);
+  return (
+    typeof item.id === 'string' &&
+    typeof item.name === 'string' &&
+    typeof item.ticker === 'string' &&
+    typeof item.color === 'string' &&
+    typeof item.icon === 'string' &&
+    typeof item.demoValue === 'number' &&
+    Number.isFinite(item.demoValue) &&
+    item.demoValue >= 0 &&
+    rarities.includes(item.rarity as Rarity)
+  );
 }
 
 function readSavedState(): State {
@@ -29,8 +43,10 @@ function readSavedState(): State {
     if (!saved || typeof saved !== 'object') return initial;
     const data = saved as Partial<State>;
     return {
-      balance: typeof data.balance === 'number' && Number.isFinite(data.balance) && data.balance >= 0
-        ? data.balance : initial.balance,
+      balance:
+        typeof data.balance === 'number' && Number.isFinite(data.balance) && data.balance >= 0
+          ? data.balance
+          : initial.balance,
       inventory: Array.isArray(data.inventory) ? data.inventory.filter(isRip) : [],
       history: Array.isArray(data.history) ? data.history.filter(isRip) : [],
     };
@@ -43,6 +59,8 @@ export function useDemoInventory() {
   const [state, setState] = useState<State>(readSavedState);
   const [cloudUser, setCloudUser] = useState<string | null>(null);
   const [cloudReady, setCloudReady] = useState(false);
+  /** When true, signed-in opens should go through the Edge Function, not local random. */
+  const [serverOpens, setServerOpens] = useState(false);
 
   useEffect(() => {
     try {
@@ -61,29 +79,26 @@ export function useDemoInventory() {
       setCloudUser(userId);
       if (userId) {
         // Never upload a browser's anonymous/local collection into a signed-in account.
-        // Wait for that account's cloud collection to hydrate before enabling sync.
         setState(initial);
         setCloudReady(false);
       }
-      // If signed out, keep the saved local demo collection instead of clearing it.
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       const userId = session?.user.id ?? null;
-      // Supabase emits INITIAL_SESSION on startup; a signed-out startup must not
-      // wipe the anonymous collection already loaded from localStorage.
       if (event === 'INITIAL_SESSION' && !userId) {
         setCloudUser(null);
         return;
       }
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        setCloudReady(false);
-        setState(initial);
-        setCloudUser(userId);
+        if (userId) {
+          setCloudReady(false);
+          setState(initial);
+          setCloudUser(userId);
+        }
       } else if (event === 'SIGNED_OUT') {
-        // Do not restore localStorage here: while signed in it may contain that
-        // account's cloud snapshot. Clear the in-memory view to prevent account leakage.
         setCloudReady(false);
         setCloudUser(null);
+        setServerOpens(false);
         setState(initial);
       } else if (userId) {
         setCloudUser(userId);
@@ -98,19 +113,21 @@ export function useDemoInventory() {
   useEffect(() => {
     if (!supabase || !cloudUser) {
       setCloudReady(false);
+      setServerOpens(false);
       return;
     }
     let active = true;
     setCloudReady(false);
-    supabase.from('user_collections')
+    supabase
+      .from('user_collections')
       .select('demo_balance, items, activity')
       .eq('user_id', cloudUser)
       .maybeSingle()
       .then(({ data, error }) => {
         if (!active) return;
         if (error) {
-          // Keep local demo data intact when the migration has not been applied.
           setCloudReady(false);
+          setServerOpens(false);
           return;
         }
         if (data) {
@@ -124,10 +141,15 @@ export function useDemoInventory() {
           });
         }
         setCloudReady(true);
+        setServerOpens(true);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [cloudUser]);
 
+  // Background sync for local mutations (anonymous path + profile edits).
+  // Server opens already wrote the authoritative row; still safe to upsert the same snapshot.
   useEffect(() => {
     if (!supabase || !cloudUser || !cloudReady) return;
     const snapshot = {
@@ -136,7 +158,9 @@ export function useDemoInventory() {
       items: state.inventory,
       activity: state.history,
     };
-    supabase.from('user_collections').upsert(snapshot, { onConflict: 'user_id' })
+    supabase
+      .from('user_collections')
+      .upsert(snapshot, { onConflict: 'user_id' })
       .then(({ error }) => {
         if (error) console.warn('RIPS LAB cloud collection sync is unavailable.', error.message);
       });
@@ -144,21 +168,35 @@ export function useDemoInventory() {
 
   return {
     ...state,
-    spend: (amount: number) => setState(s => ({
-      ...s,
-      balance: Math.max(0, Number((s.balance - amount).toFixed(4))),
-    })),
-    addRip: (rip: Rip) => setState(s => ({
-      ...s,
-      inventory: [rip, ...s.inventory],
-      history: [rip, ...s.history],
-    })),
-    openRip: (amount: number, rip: Rip) => setState(s => ({
-      ...s,
-      balance: Math.max(0, Number((s.balance - amount).toFixed(4))),
-      inventory: [rip, ...s.inventory],
-      history: [rip, ...s.history],
-    })),
+    cloudUser,
+    cloudReady,
+    /** Prefer Edge Function when the signed-in collection is hydrated. */
+    useServerOpen: Boolean(cloudUser && cloudReady && serverOpens && supabase),
+    spend: (amount: number) =>
+      setState((s) => ({
+        ...s,
+        balance: Math.max(0, Number((s.balance - amount).toFixed(4))),
+      })),
+    addRip: (rip: Rip) =>
+      setState((s) => ({
+        ...s,
+        inventory: [rip, ...s.inventory],
+        history: [rip, ...s.history],
+      })),
+    openRip: (amount: number, rip: Rip) =>
+      setState((s) => ({
+        ...s,
+        balance: Math.max(0, Number((s.balance - amount).toFixed(4))),
+        inventory: [rip, ...s.inventory],
+        history: [rip, ...s.history],
+      })),
+    /** Apply result returned by the Edge Function (already persisted server-side). */
+    applyServerOpen: (rip: Rip, balance: number) =>
+      setState((s) => ({
+        balance: Math.max(0, Number(balance.toFixed(4))),
+        inventory: [rip, ...s.inventory.filter((r) => r.id !== rip.id)],
+        history: [rip, ...s.history.filter((r) => r.id !== rip.id)],
+      })),
     reset: () => setState(initial),
   };
 }
