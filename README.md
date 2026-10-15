@@ -54,6 +54,18 @@ Configure these in Vercel for Production, Preview, and Development as needed:
 
 In Supabase Authentication, configure the production site URL and allowed redirect URLs to include the deployed RIPS LAB domain.
 
+## Phase 3 — server opens
+
+Signed-in users open packs through the `open-pack` Supabase Edge Function (balance, roll, and inventory update happen on the server under RLS). Anonymous sessions still use the local demo engine.
+
+```bash
+# After linking the Supabase project:
+supabase db push   # or run migrations in SQL Editor
+supabase functions deploy open-pack
+```
+
+See [PHASE_3.md](./PHASE_3.md).
+
 ## Important boundary
 
 This release is for a **demo launch only**. Do not accept payments, promise redeemable value, or represent demo balances and collectibles as real assets.
@@ -62,4 +74,4 @@ Any future real-money, transferable-asset, or on-chain Solana functionality requ
 
 ## Version
 
-0.4.0 — expanded token/pack catalog, build tooling, Phase 3 foundation docs.
+0.4.1 — server-authoritative pack opens (Edge Function) for signed-in users; pack catalog seed; expanded catalog.
