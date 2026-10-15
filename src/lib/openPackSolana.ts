@@ -8,20 +8,26 @@ export type SolOpenResult =
   | { ok: true; rip: Rip; signature: string }
   | { ok: false; error: string };
 
-type SendTx = (tx: Transaction, connection: Connection) => Promise<string>;
+type SendTx = (
+  tx: Transaction,
+  connection: Connection,
+  options?: { skipPreflight?: boolean; preflightCommitment?: 'processed' | 'confirmed' | 'finalized' },
+) => Promise<string>;
 
 /**
- * Pay treasury in SOL, then call open-pack-sol with the signature for server verification + roll.
- * Requires connected wallet + signed-in Supabase session.
+ * Pay treasury in SOL, confirm on-chain, then open-pack-sol verifies + rolls.
  */
 export async function openPackWithSol(params: {
   packId: string;
   priceSol: number;
   publicKey: PublicKey;
   sendTransaction: SendTx;
+  onStatus?: (message: string) => void;
 }): Promise<SolOpenResult> {
+  const status = (m: string) => params.onStatus?.(m);
+
   if (!isSolanaConfigured) {
-    return { ok: false, error: 'Treasury wallet is not configured on this deployment' };
+    return { ok: false, error: 'Treasury wallet is not configured (set VITE_TREASURY_WALLET)' };
   }
   if (!supabase) {
     return { ok: false, error: 'Supabase is not configured' };
@@ -34,15 +40,31 @@ export async function openPackWithSol(params: {
 
   try {
     const price = packPriceSol(params.packId, params.priceSol);
+    status('Building payment…');
     const tx = await buildPackPaymentTx({
       buyer: params.publicKey,
       packId: params.packId,
       priceSol: price,
     });
-    const connection = getConnection();
-    const signature = await params.sendTransaction(tx, connection);
-    await connection.confirmTransaction(signature, 'confirmed');
 
+    const connection = getConnection();
+    status('Approve the SOL transfer in your wallet…');
+    const signature = await params.sendTransaction(tx, connection, {
+      preflightCommitment: 'confirmed',
+    });
+
+    status('Confirming on Solana…');
+    const latest = await connection.getLatestBlockhash('confirmed');
+    await connection.confirmTransaction(
+      {
+        signature,
+        blockhash: latest.blockhash,
+        lastValidBlockHeight: latest.lastValidBlockHeight,
+      },
+      'confirmed',
+    );
+
+    status('Verifying payment and opening pack…');
     const { data, error } = await supabase.functions.invoke('open-pack-sol', {
       body: {
         packId: params.packId,
@@ -52,7 +74,10 @@ export async function openPackWithSol(params: {
     });
 
     if (error) {
-      return { ok: false, error: error.message || 'Server failed to verify payment' };
+      return {
+        ok: false,
+        error: `${error.message || 'Server failed to verify payment'}. If SOL left your wallet, contact support with signature: ${signature}`,
+      };
     }
     const body = data as Record<string, unknown>;
     if (body?.ok === true && body.rip) {
@@ -60,9 +85,15 @@ export async function openPackWithSol(params: {
     }
     return {
       ok: false,
-      error: typeof body?.error === 'string' ? body.error : 'Open failed after payment',
+      error:
+        (typeof body?.error === 'string' ? body.error : 'Open failed after payment') +
+        `. Signature: ${signature}`,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/User rejected|rejected the request|cancelled/i.test(msg)) {
+      return { ok: false, error: 'Transaction cancelled in wallet' };
+    }
+    return { ok: false, error: msg };
   }
 }
