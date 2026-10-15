@@ -40,14 +40,14 @@ export default function LeaderboardPage({ rips, value, signedIn }: Props) {
         title="Leaderboard."
         subtitle={
           source === 'live'
-            ? 'Demo ranks from signed-in collections (simulated value only).'
+            ? 'Wallet-session collection ranks (simulated value only).'
             : 'Demo board with sample collectors — live ranks appear after the leaderboard migration is applied.'
         }
       />
       <p className="muted-copy">
         {source === 'live'
           ? 'Live demo aggregates · no real money.'
-          : 'Sample demo data · not connected to production wallets.'}
+          : 'Sample demo data · live wallet rankings are not enabled yet.'}
       </p>
       <div className="leaderboard">
         {(board.length ? board : [{ rank: 1, name: '—', rips: 0, value: 0 }]).map((x) => (
