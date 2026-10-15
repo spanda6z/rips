@@ -5,3 +5,6 @@
 .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pay-busy{opacity:.7;pointer-events:none}
 .banner.info{background:#1a2030;border-color:#3d4a6a;color:#c5d0f0}
+
+.wallet-address-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid #38334f;border-radius:9px;background:#12141f;color:#e4e1f4;font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+.wallet-live-dot{width:6px;height:6px;border-radius:50%;background:#9ee86b;box-shadow:0 0 8px #9ee86b;flex:none}
