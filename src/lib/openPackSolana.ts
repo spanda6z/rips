@@ -35,7 +35,7 @@ export async function openPackWithSol(params: {
 
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) {
-    return { ok: false, error: 'Sign in required before purchasing a pack' };
+    return { ok: false, error: 'Connect your wallet and wait for your wallet session to finish initializing before purchasing' };
   }
 
   try {
