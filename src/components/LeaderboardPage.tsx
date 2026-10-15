@@ -51,7 +51,15 @@ export default function LeaderboardPage({ rips, value, signedIn }: Props) {
       </p>
       <div className="leaderboard">
         {(board.length ? board : [{ rank: 1, name: '—', rips: 0, value: 0 }]).map((x) => (
-          <div className={'leader' + (x.isYou ? ' you' : '')} key={x.name + x.rank}>
+          <div
+            className={'leader' + (x.isYou ? ' you' : '')}
+            style={
+              x.isYou
+                ? { outline: '1px solid rgba(139,124,255,0.55)', background: 'rgba(139,124,255,0.12)' }
+                : undefined
+            }
+            key={x.name + x.rank}
+          >
             <b className="rank">#{x.rank}</b>
             <span className="avatar">{x.name.slice(0, 1)}</span>
             <div>
