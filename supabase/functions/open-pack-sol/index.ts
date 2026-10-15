@@ -155,20 +155,24 @@ Deno.serve(async (req) => {
 
     const pre = tx.meta.preBalances;
     const post = tx.meta.postBalances;
-    const accountKeys =
-      typeof tx.transaction.message.getAccountKeys === 'function'
-        ? tx.transaction.message.getAccountKeys({
-            accountKeysFromLookups: tx.meta.loadedAddresses,
-          }).staticAccountKeys
-        : (tx.transaction.message as { accountKeys?: PublicKey[] }).accountKeys ?? [];
+    const message = tx.transaction.message;
+    const messageKeys =
+      typeof message.getAccountKeys === 'function'
+        ? message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses })
+        : null;
+    const keyStrs = messageKeys
+      ? Array.from({ length: pre.length }, (_, i) => {
+          const key = messageKeys.get(i);
+          return key ? key.toBase58() : '';
+        })
+      : ((message as { accountKeys?: PublicKey[] }).accountKeys ?? []).map((k: PublicKey) => k.toBase58());
 
-    const keyStrs = accountKeys.map((k: PublicKey) =>
-      typeof k.toBase58 === 'function' ? k.toBase58() : String(k),
-    );
-    const buyerIdx = keyStrs.indexOf(buyer.toBase58());
+    const buyerAddress = buyer.toBase58();
+    const buyerIdx = keyStrs.indexOf(buyerAddress);
     const treasuryIdx = keyStrs.indexOf(treasury.toBase58());
-    if (buyerIdx < 0 || treasuryIdx < 0) {
-      return json(402, { error: 'Payment does not involve buyer and treasury' });
+    // The buyer must be the transaction fee payer, not merely an account mentioned by someone else's payment.
+    if (buyerIdx !== 0 || treasuryIdx < 0) {
+      return json(402, { error: 'Payment must be signed and paid by the connected buyer to the treasury' });
     }
     const received =
       (pre[treasuryIdx] ?? 0) < (post[treasuryIdx] ?? 0)
@@ -184,7 +188,11 @@ Deno.serve(async (req) => {
     }
 
     const logs = tx.meta.logMessages ?? [];
-    const memoOk = logs.some((l: string) => l.includes(packId) && l.includes(buyer.toBase58()));
+    const expectedMemo = `rips:v1:${packId}:${buyerAddress}`;
+    const memoOk = logs.some((line: string) => line.includes(expectedMemo));
+    if (!memoOk) {
+      return json(402, { error: 'Payment memo does not match this buyer and pack' });
+    }
 
     const token = chooseReward(pack.odds);
     const rip = {
@@ -227,14 +235,18 @@ Deno.serve(async (req) => {
       return json(500, { error: 'Could not update collection' });
     }
 
-    await supabase.from('pack_payments').insert({
+    const { error: paymentInsertError } = await supabase.from('pack_payments').insert({
       user_id: user.id,
       signature,
       pack_id: packId,
-      buyer: buyer.toBase58(),
+      buyer: buyerAddress,
       lamports: received,
       memo_matched: memoOk,
     });
+    if (paymentInsertError) {
+      console.error('Could not record verified pack payment', paymentInsertError.message);
+      return json(500, { error: 'Pack was added, but payment recording failed. Contact support with your transaction signature.' });
+    }
 
     return json(200, {
       ok: true,
