@@ -34,6 +34,7 @@ export default function WalletBar() {
       <span className="network-chip" title="Solana cluster">
         {SOLANA_NETWORK}
       </span>
+      {publicKey && <span className="wallet-address-chip" title={publicKey.toBase58()}><span className="wallet-live-dot"/> {publicKey.toBase58().slice(0, 4)}…{publicKey.toBase58().slice(-4)}</span>}
       {publicKey && balance !== null && (
         <span className="balance-chip" title="Wallet SOL balance">
           <span>◎</span>
