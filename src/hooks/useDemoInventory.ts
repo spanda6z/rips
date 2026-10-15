@@ -56,18 +56,36 @@ export function useDemoInventory() {
     if (!supabase) return;
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
-      if (active) {
+      if (!active) return;
+      const userId = data.session?.user.id ?? null;
+      setCloudUser(userId);
+      if (userId) {
         // Never upload a browser's anonymous/local collection into a signed-in account.
         // Wait for that account's cloud collection to hydrate before enabling sync.
         setState(initial);
         setCloudReady(false);
-        setCloudUser(data.session?.user.id ?? null);
       }
+      // If signed out, keep the saved local demo collection instead of clearing it.
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCloudReady(false);
-      setState(initial);
-      setCloudUser(session?.user.id ?? null);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      const userId = session?.user.id ?? null;
+      // Supabase emits INITIAL_SESSION on startup; a signed-out startup must not
+      // wipe the anonymous collection already loaded from localStorage.
+      if (event === 'INITIAL_SESSION' && !userId) {
+        setCloudUser(null);
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        setCloudReady(false);
+        setState(initial);
+        setCloudUser(userId);
+      } else if (event === 'SIGNED_OUT') {
+        setCloudReady(false);
+        setCloudUser(null);
+        setState(readSavedState());
+      } else if (userId) {
+        setCloudUser(userId);
+      }
     });
     return () => {
       active = false;
