@@ -8,6 +8,18 @@ export default function WalletBar() {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [balance, setBalance] = useState<number | null>(null);
+  const [addressCopied, setAddressCopied] = useState(false);
+
+  const copyAddress = useCallback(async () => {
+    if (!publicKey) return;
+    try {
+      await navigator.clipboard.writeText(publicKey.toBase58());
+      setAddressCopied(true);
+      window.setTimeout(() => setAddressCopied(false), 1800);
+    } catch {
+      setAddressCopied(false);
+    }
+  }, [publicKey]);
 
   const refresh = useCallback(async () => {
     if (!publicKey) {
@@ -34,7 +46,7 @@ export default function WalletBar() {
       <span className="network-chip" title="Solana cluster">
         {SOLANA_NETWORK}
       </span>
-      {publicKey && <span className="wallet-address-chip" title={publicKey.toBase58()}><span className="wallet-live-dot"/> {publicKey.toBase58().slice(0, 4)}…{publicKey.toBase58().slice(-4)}</span>}
+      {publicKey && <button type="button" className="wallet-address-chip" title="Copy wallet address" aria-label="Copy wallet address" onClick={copyAddress}><span className="wallet-live-dot"/> {publicKey.toBase58().slice(0, 4)}…{publicKey.toBase58().slice(-4)} <span className="wallet-copy-label">{addressCopied ? 'Copied!' : 'Copy'}</span></button>}
       {publicKey && balance !== null && (
         <span className="balance-chip" title="Wallet SOL balance">
           <span>◎</span>
