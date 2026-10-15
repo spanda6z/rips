@@ -95,10 +95,11 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const rpc = Deno.env.get('SOLANA_RPC_URL') ?? 'https://api.devnet.solana.com';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const rpc = Deno.env.get('SOLANA_RPC_URL') ?? '';
     const treasuryStr = Deno.env.get('TREASURY_WALLET') ?? '';
-    if (!supabaseUrl || !anonKey || !treasuryStr) {
-      return json(500, { error: 'Server misconfigured (Supabase or TREASURY_WALLET)' });
+    if (!supabaseUrl || !anonKey || !serviceRoleKey || !rpc || !treasuryStr) {
+      return json(500, { error: 'Server misconfigured. Set Supabase keys, SOLANA_RPC_URL (mainnet), and TREASURY_WALLET.' });
     }
     let treasury: PublicKey;
     try {
@@ -109,6 +110,9 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
+    });
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     const {
       data: { user },
@@ -194,20 +198,6 @@ Deno.serve(async (req) => {
       return json(402, { error: 'Payment memo does not match this buyer and pack' });
     }
 
-    // Claim the payment signature before granting any collectible. The database's
-    // unique signature constraint prevents concurrent requests from redeeming one tx twice.
-    const { error: paymentInsertError } = await supabase.from('pack_payments').insert({
-      user_id: user.id,
-      signature,
-      pack_id: packId,
-      buyer: buyerAddress,
-      lamports: received,
-      memo_matched: memoOk,
-    });
-    if (paymentInsertError) {
-      return json(409, { error: 'This payment could not be claimed (it may already have been used). If SOL left your wallet, contact support with your transaction signature.' });
-    }
-
     const token = chooseReward(pack.odds);
     const rip = {
       id: crypto.randomUUID(),
@@ -218,35 +208,25 @@ Deno.serve(async (req) => {
       buyer: buyer.toBase58(),
     };
 
-    let { data: collection } = await supabase
-      .from('user_collections')
-      .select('id,user_id,demo_balance,items,activity')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (!collection) {
-      const { data: created, error: createError } = await supabase
-        .from('user_collections')
-        .insert({ user_id: user.id })
-        .select('id,user_id,demo_balance,items,activity')
-        .single();
-      if (createError || !created) {
-        return json(500, { error: 'Could not create collection' });
-      }
-      collection = created;
-    }
-
-    const items = Array.isArray(collection.items) ? collection.items : [];
-    const activity = Array.isArray(collection.activity) ? collection.activity : [];
-    const nextItems = [rip, ...items];
-    const nextActivity = [rip, ...activity].slice(0, MAX_ACTIVITY);
-
-    const { error: updateError } = await supabase
-      .from('user_collections')
-      .update({ items: nextItems, activity: nextActivity })
-      .eq('user_id', user.id);
-    if (updateError) {
-      return json(500, { error: 'Could not update collection' });
+    // A privileged RPC atomically claims the unique signature and updates inventory.
+    const { data: redemption, error: redemptionError } = await admin.rpc('redeem_pack_payment', {
+      p_user_id: user.id,
+      p_signature: signature,
+      p_pack_id: packId,
+      p_buyer: buyerAddress,
+      p_lamports: received,
+      p_rip: rip,
+      p_max_activity: MAX_ACTIVITY,
+    });
+    if (redemptionError) {
+      console.error('Atomic payment redemption failed', redemptionError);
+      const duplicate = redemptionError.code === '23505';
+      return json(duplicate ? 409 : 500, {
+        error: duplicate
+          ? 'This payment signature has already been redeemed. If SOL left your wallet and no collectible appeared, contact support with your transaction signature.'
+          : 'Payment was verified but the collectible could not be saved. The database transaction was rolled back; retry safely or contact support with your transaction signature.',
+        signature,
+      });
     }
 
     return json(200, {
@@ -254,7 +234,7 @@ Deno.serve(async (req) => {
       rip,
       signature,
       paidLamports: received,
-      inventoryCount: nextItems.length,
+      inventoryCount: redemption?.inventoryCount ?? null,
     });
   } catch (err) {
     console.error('open-pack-sol', err);
