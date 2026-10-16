@@ -1,14 +1,645 @@
-import {useEffect,useMemo,useState} from 'react';
-import {useWallet} from '@solana/wallet-adapter-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import {
+  BarChart3,
+  Check,
+  Coins,
+  Home,
+  Search,
+  Sparkles,
+  Trophy,
+  Wallet,
+  X,
+} from 'lucide-react';
+import AccountPanel from './components/AccountPanel';
+import Achievements from './components/Achievements';
+import LeaderboardPage from './components/LeaderboardPage';
 import WalletBar from './components/WalletBar';
-import Achievements from './components/Achievements';import DailyMissions from './components/DailyMissions';import StreakTracker from './components/StreakTracker';import LeaderboardPage from './components/LeaderboardPage';
-import {Activity,ArrowUpRight,BadgeHelp,Check,ChevronDown,Coins,Crown,FlaskConical,LayoutGrid,RotateCcw,Search,Sparkles,Trophy,X} from 'lucide-react';
-import {packs} from './data/packs';import {supabase} from './lib/supabaseClient';import {tokens} from './data/tokens';import {useDemoInventory} from './hooks/useDemoInventory';import {chooseReward,createRipId,validatePack} from './lib/packEngine';import {openPackServer} from './lib/openPackServer';import {openPackWithSol} from './lib/openPackSolana';import {isSolanaConfigured,packPriceSol} from './lib/solanaConfig';import {linkWalletToProfile} from './lib/linkWallet';import type {Pack,Rip} from './types';
-type Page='shop'|'inventory'|'leaderboard'|'how';
-const nav:{id:Page;label:string;icon:typeof LayoutGrid}[]=[{id:'shop',label:'Pack Shop',icon:LayoutGrid},{id:'inventory',label:'My Rips',icon:Coins},{id:'leaderboard',label:'Leaderboard',icon:Trophy},{id:'how',label:'How it works',icon:BadgeHelp}];
-export default function App(){const [page,setPage]=useState<Page>('shop');const [opening,setOpening]=useState<Pack|null>(null);const [reward,setReward]=useState<Rip|null>(null);const [error,setError]=useState('');const [payStatus,setPayStatus]=useState('');const [resetting,setResetting]=useState(false);const [selectedRip,setSelectedRip]=useState<Rip|null>(null);const [rarityFilter,setRarityFilter]=useState('All');const [sortOrder,setSortOrder]=useState('newest');const [searchTerm,setSearchTerm]=useState('');const [catalogPacks,setCatalogPacks]=useState<Pack[]>(packs);const demo=useDemoInventory();const {publicKey,sendTransaction,connected}=useWallet();useEffect(()=>{if(!publicKey||!supabase)return;let active=true;supabase.auth.getSession().then(async({data,error})=>{if(!active)return;if(error){setError('Could not prepare your wallet session. Please reconnect your wallet.');return}if(!data.session){const {error:authError}=await supabase.auth.signInAnonymously();if(active&&authError)setError('Wallet connected, but wallet-only sessions are not enabled on the backend yet. Please enable anonymous sign-ins in Supabase.')}});return()=>{active=false}},[publicKey]);useEffect(()=>{if(publicKey&&demo.cloudUser){linkWalletToProfile(publicKey.toBase58())}},[publicKey,demo.cloudUser]);const visibleInventory=useMemo(()=>demo.inventory.filter(r=>(rarityFilter==='All'||r.token.rarity===rarityFilter)&&`${r.token.name} ${r.token.ticker} ${r.packName}`.toLowerCase().includes(searchTerm.toLowerCase())).sort((a,b)=>sortOrder==='value-high'?b.token.demoValue-a.token.demoValue:sortOrder==='value-low'?a.token.demoValue-b.token.demoValue:sortOrder==='name'?a.token.name.localeCompare(b.token.name):new Date(b.openedAt).getTime()-new Date(a.openedAt).getTime()),[demo.inventory,rarityFilter,sortOrder,searchTerm]);const total=useMemo(()=>demo.inventory.reduce((s,r)=>s+r.token.demoValue,0),[demo.inventory]);useEffect(()=>{if(!supabase)return;let active=true;supabase.from('pack_catalog').select('id,name,subtitle,demo_price,accent,odds,featured').eq('enabled',true).then(({data,error})=>{if(!active||error||!data?.length)return;const loaded:Pack[]=[];for(const row of data){const odds=row.odds as Record<string,unknown>|null;if(!row.id||typeof row.name!=='string'||typeof row.subtitle!=='string'||typeof row.accent!=='string'||!/^#[0-9a-fA-F]{3,8}$/.test(row.accent)||typeof row.demo_price!=='number'||!odds||typeof odds!=='object')continue;const mapped={Common:Number(odds.Common),Rare:Number(odds.Rare),Epic:Number(odds.Epic),Legendary:Number(odds.Legendary)};if([mapped.Common,mapped.Rare,mapped.Epic,mapped.Legendary].some(n=>!Number.isFinite(n)))continue;loaded.push({id:row.id,name:row.name,subtitle:row.subtitle,price:row.demo_price,accent:row.accent,odds:mapped,featured:!!row.featured})}if(loaded.length)setCatalogPacks(loaded)});return()=>{active=false}},[]);async function shareCollectible(rip:Rip){const text=`I just pulled ${rip.token.name} (${rip.token.ticker}) — ${rip.token.rarity} rarity — on RIPS LAB. Collection ID: RIP / ${rip.id.slice(-5).toUpperCase()}. Estimated collection value: ◎ ${rip.token.demoValue.toFixed(2)}. Collect your next rip: https://rips-lac.vercel.app`;try{if(navigator.share){await navigator.share({title:`My ${rip.token.rarity} pull on RIPS LAB`,text,url:'https://rips-lac.vercel.app'});setPayStatus('Collectible share opened.');}else{await navigator.clipboard.writeText(text);setPayStatus('Collectible details copied — ready to share.');}}catch(e){if(e instanceof Error&&e.name==='AbortError')return;try{await navigator.clipboard.writeText(text);setPayStatus('Collectible details copied — ready to share.');}catch{setPayStatus('Sharing is not available in this browser.');}}}function exportCsv(){const header=['id','name','ticker','rarity','demoValue','packName','openedAt'];const rows=demo.inventory.map(r=>[r.id,r.token.name,r.token.ticker,r.token.rarity,r.token.demoValue,r.packName,r.openedAt].map(v=>{const s=String(v);return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s}).join(','));const blob=new Blob([[header.join(','),...rows].join('\n')],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='rips-inventory.csv';a.click();URL.revokeObjectURL(url);window.setTimeout(()=>URL.revokeObjectURL(url),1000)}
-async function rip(pack:Pack){setError('');const invalid=validatePack(pack);if(invalid){setError(invalid);return}try{if(isSolanaConfigured){if(!connected||!publicKey){setError('Connect a Solana wallet to buy this pack.');return}if(!demo.cloudUser){setError('Your wallet session is still loading. Wait a moment, then try again.');return}setPayStatus('Preparing…');const result=await openPackWithSol({packId:pack.id,priceSol:pack.price,publicKey,sendTransaction,onStatus:setPayStatus});setPayStatus('');if(!result.ok){setError(result.error);return}if(typeof demo.applyServerOpen==='function'){demo.applyServerOpen(result.rip,demo.balance)}else{demo.addRip(result.rip)}setReward(result.rip);setOpening(null);return}if(demo.useServerOpen){const result=await openPackServer(pack.id);if(!result.ok){setError(result.error);return}demo.applyServerOpen(result.rip,result.balance);setReward(result.rip);setOpening(null);return}if(demo.balance<pack.price){setError('Not enough balance.');return}const token=chooseReward(pack,tokens);const item={id:createRipId(),token,packName:pack.name,openedAt:new Date().toISOString()};demo.openRip(pack.price,item);setReward(item);setOpening(null)}catch(e){setPayStatus('');setError(e instanceof Error?e.message:'Could not open this pack.')}}
-return <div className="app"><aside className="sidebar"><a className="brand" href="#" onClick={e=>{e.preventDefault();setPage('shop')}}><span className="brand-mark">R.</span><span><b>RIPS<span>LAB</span></b><small>SOLANA PACKS</small></span></a><p className="nav-label">WORKSPACE</p>{nav.map(n=><button key={n.id} className={'nav-item '+(page===n.id?'active':'')} onClick={()=>setPage(n.id)}><n.icon size={18}/><span>{n.label}</span></button>)}<div className="sidebar-foot"><span className="pill online">Solana</span><small>Real SOL packs</small></div></aside><main className="main"><header className="topbar"><div className="crumbs"><span>WORKSPACE</span><span>/</span><b>{nav.find(n=>n.id===page)?.label}</b></div><div className="top-actions"><span className="mode-chip">LIVE</span><WalletBar/></div></header>{payStatus&&<div className="banner info" role="status">{payStatus}</div>}{error&&<div className="banner error" role="alert">{error}<button aria-label="Dismiss" onClick={()=>setError('')}>×</button></div>}{page==='shop'&&<><section className="hero"><div><span className="eyebrow">+ THE NEXT RIP STARTS HERE</span><h1>Crack a pack.<br/><span>Find your next gem.</span></h1><p>Pay in SOL from your wallet. Server verifies the transfer, then rolls your pull into your collection.</p><div className="hero-actions"><button className="primary" onClick={()=>document.getElementById('pack-grid')?.scrollIntoView({behavior:'smooth'})}>Explore packs <ArrowUpRight size={16}/></button><button className="secondary" onClick={()=>setPage('how')}>How it works</button></div><ul className="hero-notes"><li><Check size={14}/> Wallet required</li><li><Check size={14}/> Pay in SOL</li></ul></div><div className="hero-card mascot-stage"><span className="rare-tag">RIPS LAB ORIGINAL</span><div className="mascot-aura"/><div className="ripper-mascot" role="img" aria-label="Ripper, the RIPS LAB mascot"><div className="ripper-eye eye-left"/><div className="ripper-eye eye-right"/><div className="ripper-glasses"><i/><i/></div><div className="ripper-mouth"/><div className="ripper-chain"/><div className="ripper-pendant">R</div></div><div className="mascot-caption"><b>MEET RIPPER.</b><span>YOUR NEXT GEM IS OUT THERE.</span></div><p>DIGITAL TREASURES / VOL. 01</p></div></section><div className="stats"><Stat icon={<Activity size={16}/>} label="PACKS OPENED" value={String(demo.history.length)} note="YOUR SESSION"/><Stat icon={<Coins size={16}/>} label="COLLECTED RIPS" value={String(demo.inventory.length).padStart(2,'0')} note="IN YOUR VAULT"/><Stat icon={<Crown size={16}/>} label="COLLECTION VALUE" value={'◎ '+total.toFixed(2)} note="EST. VALUE"/></div><Achievements inventory={demo.inventory} history={demo.history}/><DailyMissions inventory={demo.inventory} history={demo.history}/><StreakTracker history={demo.history}/><section id="pack-grid" className="pack-section"><div className="section-head"><h2>Pack shop.</h2><p>Prices are in SOL. Connect your wallet to open.</p></div><div className="pack-grid">{catalogPacks.map(p=><article key={p.id} className={'pack-card'+(p.featured?' featured':'')} style={{'--pack-accent':p.accent} as React.CSSProperties}><div className="pack-top"><span className="pack-price">◎ {p.price.toFixed(2)}</span>{p.featured&&<span className="featured-badge">FEATURED</span>}</div><h3>{p.name}</h3><p>{p.subtitle}</p><ul className="odds">{(['Common','Rare','Epic','Legendary'] as const).map(r=><li key={r}><i className={'dot '+r.toLowerCase()}/><span>{r}</span><b>{p.odds[r]}%</b></li>)}</ul><button className="primary wide" onClick={()=>setOpening(p)}>Open pack</button></article>)}</div></section></>}{page==='inventory'&&<><PageTitle title="My Rips." subtitle="Your collection after pack opens."/>{demo.cloudError&&<div className="banner error" role="alert">{demo.cloudError}</div>}<div className="stats compact"><Stat label="COLLECTED ITEMS" value={String(demo.inventory.length)}/><Stat label="UNIQUE FINDS" value={String(new Set(demo.inventory.map(r=>r.token.ticker)).size)} note="DISTINCT TICKERS"/><Stat label="EST. VALUE" value={'◎ '+total.toFixed(2)}/><Stat label="LEGENDARY FINDS" value={String(demo.inventory.filter(r=>r.token.rarity==='Legendary').length)} note="TOP RARITY"/></div>{demo.cloudUser&&!demo.cloudReady&&!demo.cloudError?<div className="empty"><Coins size={30}/><h2>Loading your vault.</h2><p>Fetching your saved collection…</p></div>:demo.inventory.length===0?<div className="empty"><Coins size={30}/><h2>Your vault is waiting.</h2><p>Connect your wallet and open a pack.</p><button className="primary" onClick={()=>setPage('shop')}>Browse packs</button></div>:<><div className="inventory-toolbar"><button type="button" className="secondary" onClick={exportCsv}>Export CSV</button><label className="search-field"><Search size={14}/><input placeholder="Search name, ticker, pack…" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/>{searchTerm&&<button aria-label="Clear search" onClick={()=>setSearchTerm('')}><X size={14}/></button>}</label><label className="filter-field"><span>RARITY</span><select aria-label="Filter by rarity" value={rarityFilter} onChange={e=>setRarityFilter(e.target.value)}><option>All</option><option>Common</option><option>Rare</option><option>Epic</option><option>Legendary</option></select><ChevronDown size={14}/></label><label className="filter-field"><span>SORT</span><select aria-label="Sort collection" value={sortOrder} onChange={e=>setSortOrder(e.target.value)}><option value="newest">Newest</option><option value="value-high">Value: high to low</option><option value="value-low">Value: low to high</option><option value="name">Name A–Z</option></select><ChevronDown size={14}/></label></div>{visibleInventory.length===0?<div className="empty filtered-empty"><Search size={25}/><h2>No matching rips.</h2><p>Try another search or clear your filters to see your full collection.</p><button className="secondary" onClick={()=>{setSearchTerm("");setRarityFilter("All");setSortOrder("newest")}}>Clear filters</button></div>:<div className="collection">{visibleInventory.map(r=><TokenCard key={r.id} rip={r} onOpen={()=>setSelectedRip(r)}/>)}</div>}</>}<div className="activity-head"><h2 className="subhead">Activity log</h2><span>{demo.history.length} EVENTS</span></div>{demo.history.length===0?<p className="muted-copy">Paid opens appear here.</p>:demo.history.map(r=><div className="history" key={r.id}><span>{r.token.icon}</span><div><b>{r.packName} opened</b><small>{r.token.name} (${r.token.ticker}) · {new Date(r.openedAt).toLocaleString()}</small></div><span className="activity-status"><Check size={12}/> COMPLETE</span><strong>+◎ {r.token.demoValue.toFixed(2)}</strong></div>)}</>}{page==='leaderboard'&&<LeaderboardPage rips={demo.history.length} value={total} signedIn={Boolean(demo.cloudUser)}/>}{page==='how'&&<><PageTitle title="How it works." subtitle="Real SOL payments on Solana."/><div className="how-grid"><article><FlaskConical size={20}/><h3>1. Connect your wallet</h3><p>Your connected Solana wallet is the starting point for your RIPS LAB session.</p></article><article><Sparkles size={20}/><h3>2. Pay in SOL</h3><p>Opening a pack sends SOL to the treasury. You sign the transaction in your wallet.</p></article><article><Coins size={20}/><h3>3. Server verifies</h3><p>We confirm the transfer on-chain, then roll rarity and credit your inventory.</p></article><article><Trophy size={20}/><h3>4. Collect</h3><p>Rips live in your account inventory. NFT mint can be added next.</p></article></div></>}{opening&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setOpening(null)}}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="open-pack-title"><button className="close" aria-label="Close" onClick={()=>setOpening(null)}>×</button><span className="eyebrow">OPEN PACK</span><h2 id="open-pack-title">{opening.name}</h2><p>{opening.subtitle}</p><ul className="odds dense">{(['Common','Rare','Epic','Legendary'] as const).map(r=><li key={r}><i className={'dot '+r.toLowerCase()}/><span>{r}</span><b>{opening.odds[r]}%</b></li>)}</ul><p className="cost">Cost <strong>◎ {opening.price.toFixed(2)} SOL</strong></p><div className="actions"><button className="secondary" onClick={()=>setOpening(null)}>Cancel</button><button className="primary" onClick={()=>rip(opening)} disabled={Boolean(payStatus)}>{payStatus?'Working…':'Pay & rip'}</button></div></section></div>}{reward&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setReward(null)}}><section className="modal reward" role="dialog" aria-modal="true" aria-labelledby="reward-title"><button className="close" aria-label="Close" onClick={()=>setReward(null)}>×</button><span className="eyebrow">RIPPER SAYS…</span><div className={"reward-mascot reaction-"+reward.token.rarity.toLowerCase()}><div className="reaction-face"><i/><i/></div><div className="reaction-shades"><i/><i/></div><div className="reaction-smile"/><div className="reaction-chain"/><div className="reaction-pendant">R</div></div><p className="reaction-line">{reward.token.rarity==='Legendary'?"NO WAY. THAT’S A LEGENDARY!":reward.token.rarity==='Epic'?"BIG PULL! THE LAB IS BUZZING.":reward.token.rarity==='Rare'?"NICE FIND. THAT ONE’S GOT SPARK.":"A FRESH RIP FOR THE VAULT."}</p><div className={"reward-art rarity-art-"+reward.token.rarity.toLowerCase()} style={{'--token-color':reward.token.color} as React.CSSProperties}>{reward.token.icon}</div><small className={'rarity '+reward.token.rarity.toLowerCase()}>{reward.token.rarity}</small><h2 id="reward-title">{reward.token.name}</h2><p>${reward.token.ticker} · from {reward.packName}</p><div className="reward-value"><small>ESTIMATED COLLECTION VALUE</small><strong>◎ {reward.token.demoValue.toFixed(2)}</strong><span>RIP / {reward.id.slice(-5).toUpperCase()}</span></div><div className="pull-receipt"><div><small>PACK</small><strong>{reward.packName}</strong></div><div><small>RARITY ODDS</small><strong>{(catalogPacks.find(p=>p.name===reward.packName)?.odds[reward.token.rarity]??packs.find(p=>p.name===reward.packName)?.odds[reward.token.rarity]??0).toFixed(2)}%</strong></div><div><small>RARITY TIER</small><strong>{reward.token.rarity.toUpperCase()}</strong></div></div><div className="actions reward-actions"><button className="secondary" onClick={()=>setReward(null)}>Keep ripping</button><button className="primary" onClick={()=>{setReward(null);setPage('inventory')}}>View my Rips <ArrowUpRight size={15}/></button></div></section></div>}{selectedRip&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setSelectedRip(null)}}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title"><button className="close" aria-label="Close" onClick={()=>setSelectedRip(null)}>×</button><span className="eyebrow">YOUR COLLECTIBLE</span><div className="reward-art" style={{'--token-color':selectedRip.token.color} as React.CSSProperties}>{selectedRip.token.icon}</div><small className={'rarity '+selectedRip.token.rarity.toLowerCase()}>{selectedRip.token.rarity}</small><h2 id="detail-title">{selectedRip.token.name}</h2><p>${selectedRip.token.ticker} · {selectedRip.packName}</p><div className="detail-facts"><div><small>COLLECTION ID</small><strong>RIP / {selectedRip.id.slice(-5).toUpperCase()}</strong></div><div><small>EST. VALUE</small><strong>◎ {selectedRip.token.demoValue.toFixed(2)}</strong></div><div><small>COLLECTED ON</small><strong>{new Date(selectedRip.openedAt).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"})}</strong></div></div><div className="detail-actions"><button className="secondary" onClick={()=>shareCollectible(selectedRip)}><ArrowUpRight size={15}/> Share collectible</button><button className="primary" onClick={()=>setSelectedRip(null)}>Back to collection</button></div></section></div>}</main></div>}
-function Stat({icon,label,value,note}:{icon?:React.ReactNode;label:string;value:string;note?:string}){return <div className="stat">{icon&&<span className="stat-icon">{icon}</span>}<div><small>{label}</small><strong>{value}</strong></div>{note&&<em>{note}</em>}</div>}
-function PageTitle({title,subtitle}:{title:string;subtitle:string}){return <section className="page-title"><span className="eyebrow">YOUR WORKSPACE</span><h1>{title}</h1><p>{subtitle}</p></section>}
-function TokenCard({rip,onOpen}:{rip:Rip;onOpen:()=>void}){return <button type="button" className={"token-card token-card-button rarity-edge-"+rip.token.rarity.toLowerCase()} onClick={onOpen} aria-label={`View details for ${rip.token.name}`}><div className="token-card-top"><span className="token-serial">RIP / {rip.id.slice(-5).toUpperCase()}</span><span className="token-owned"><Check size={11}/> COLLECTED</span></div><div className="token-card-main"><div className="token-art" style={{'--token-color':rip.token.color} as React.CSSProperties}>{rip.token.icon}</div><div className="token-info"><small className={'rarity '+rip.token.rarity.toLowerCase()}>{rip.token.rarity}</small><h3>{rip.token.name}</h3><p>${rip.token.ticker} · {rip.packName}</p><div className="token-estimate"><small>EST. VALUE</small><strong>◎ {rip.token.demoValue.toFixed(2)}</strong></div></div><ArrowUpRight className="token-open-icon" size={16}/></div></button>}
+import { packs as defaultPacks } from './data/packs';
+import { tokens } from './data/tokens';
+import { useDemoInventory } from './hooks/useDemoInventory';
+import { linkWalletToProfile } from './lib/linkWallet';
+import { openPackServer } from './lib/openPackServer';
+import { openPackWithSol } from './lib/openPackSolana';
+import { chooseReward, createRipId, validatePack } from './lib/packEngine';
+import { isSolanaConfigured } from './lib/solanaConfig';
+import { supabase } from './lib/supabaseClient';
+import type { Pack, Rip } from './types';
+
+type Page = 'shop' | 'inventory' | 'leaderboard' | 'how';
+
+const DOCK: { id: Page; label: string; icon: typeof Home }[] = [
+  { id: 'shop', label: 'Shop', icon: Home },
+  { id: 'inventory', label: 'Vault', icon: Coins },
+  { id: 'leaderboard', label: 'Ranks', icon: BarChart3 },
+  { id: 'how', label: 'Guide', icon: Trophy },
+];
+
+export default function App() {
+  const [page, setPage] = useState<Page>('shop');
+  const [activePackIdx, setActivePackIdx] = useState(0);
+  const [opening, setOpening] = useState<Pack | null>(null);
+  const [reward, setReward] = useState<Rip | null>(null);
+  const [error, setError] = useState('');
+  const [payStatus, setPayStatus] = useState('');
+  const [selectedRip, setSelectedRip] = useState<Rip | null>(null);
+  const [rarityFilter, setRarityFilter] = useState('All');
+  const [sortOrder, setSortOrder] = useState('newest');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [catalogPacks, setCatalogPacks] = useState<Pack[]>(defaultPacks);
+
+  const demo = useDemoInventory();
+  const { publicKey, sendTransaction, connected } = useWallet();
+
+  useEffect(() => {
+    if (publicKey && demo.cloudUser) {
+      linkWalletToProfile(publicKey.toBase58());
+    }
+  }, [publicKey, demo.cloudUser]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    supabase
+      .from('pack_catalog')
+      .select('id,name,subtitle,demo_price,accent,odds,featured')
+      .eq('enabled', true)
+      .then(({ data, error: err }) => {
+        if (!active || err || !data?.length) return;
+        const loaded: Pack[] = [];
+        for (const row of data) {
+          const odds = row.odds as Record<string, unknown> | null;
+          if (
+            !row.id ||
+            typeof row.name !== 'string' ||
+            typeof row.subtitle !== 'string' ||
+            typeof row.accent !== 'string' ||
+            !/^#[0-9a-fA-F]{3,8}$/.test(row.accent) ||
+            typeof row.demo_price !== 'number' ||
+            !odds ||
+            typeof odds !== 'object'
+          ) {
+            continue;
+          }
+          const mapped = {
+            Common: Number(odds.Common),
+            Rare: Number(odds.Rare),
+            Epic: Number(odds.Epic),
+            Legendary: Number(odds.Legendary),
+          };
+          if ([mapped.Common, mapped.Rare, mapped.Epic, mapped.Legendary].some((n) => !Number.isFinite(n))) {
+            continue;
+          }
+          loaded.push({
+            id: row.id,
+            name: row.name,
+            subtitle: row.subtitle,
+            price: row.demo_price,
+            accent: row.accent,
+            odds: mapped,
+            featured: !!row.featured,
+          });
+        }
+        if (loaded.length) {
+          const featuredIdx = loaded.findIndex((p) => p.featured);
+          setCatalogPacks(loaded);
+          if (featuredIdx >= 0) setActivePackIdx(featuredIdx);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const activePack = catalogPacks[Math.min(activePackIdx, catalogPacks.length - 1)] ?? catalogPacks[0];
+
+  const visibleInventory = useMemo(
+    () =>
+      demo.inventory
+        .filter(
+          (r) =>
+            (rarityFilter === 'All' || r.token.rarity === rarityFilter) &&
+            `${r.token.name} ${r.token.ticker} ${r.packName}`
+              .toLowerCase()
+              .includes(searchTerm.toLowerCase()),
+        )
+        .sort((a, b) =>
+          sortOrder === 'value-high'
+            ? b.token.demoValue - a.token.demoValue
+            : sortOrder === 'value-low'
+              ? a.token.demoValue - b.token.demoValue
+              : sortOrder === 'name'
+                ? a.token.name.localeCompare(b.token.name)
+                : new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime(),
+        ),
+    [demo.inventory, rarityFilter, sortOrder, searchTerm],
+  );
+
+  const total = useMemo(
+    () => demo.inventory.reduce((s, r) => s + r.token.demoValue, 0),
+    [demo.inventory],
+  );
+
+  function exportCsv() {
+    const header = ['id', 'name', 'ticker', 'rarity', 'demoValue', 'packName', 'openedAt'];
+    const rows = demo.inventory.map((r) =>
+      [r.id, r.token.name, r.token.ticker, r.token.rarity, r.token.demoValue, r.packName, r.openedAt]
+        .map((v) => {
+          const s = String(v);
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(','),
+    );
+    const blob = new Blob([[header.join(','), ...rows].join('\n')], {
+      type: 'text/csv;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rips-inventory.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function rip(pack: Pack) {
+    setError('');
+    const invalid = validatePack(pack);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    try {
+      if (isSolanaConfigured) {
+        if (!connected || !publicKey) {
+          setError('Connect a Solana wallet to buy this pack.');
+          return;
+        }
+        if (!demo.cloudUser) {
+          setError('Sign in so your collection can be saved after payment.');
+          return;
+        }
+        setPayStatus('Preparing\u2026');
+        const result = await openPackWithSol({
+          packId: pack.id,
+          priceSol: pack.price,
+          publicKey,
+          sendTransaction,
+          onStatus: setPayStatus,
+        });
+        setPayStatus('');
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        if (typeof demo.applyServerOpen === 'function') {
+          demo.applyServerOpen(result.rip, demo.balance);
+        } else {
+          demo.addRip(result.rip);
+        }
+        setReward(result.rip);
+        setOpening(null);
+        return;
+      }
+      if (demo.useServerOpen) {
+        const result = await openPackServer(pack.id);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        demo.applyServerOpen(result.rip, result.balance);
+        setReward(result.rip);
+        setOpening(null);
+        return;
+      }
+      if (demo.balance < pack.price) {
+        setError('Not enough balance.');
+        return;
+      }
+      const token = chooseReward(pack, tokens);
+      const item = {
+        id: createRipId(),
+        token,
+        packName: pack.name,
+        openedAt: new Date().toISOString(),
+      };
+      demo.openRip(pack.price, item);
+      setReward(item);
+      setOpening(null);
+    } catch (e) {
+      setPayStatus('');
+      setError(e instanceof Error ? e.message : 'Could not open this pack.');
+    }
+  }
+
+  function ctaLabel() {
+    if (payStatus) return 'Working\u2026';
+    if (isSolanaConfigured && !connected) return 'Connect wallet to rip';
+    if (isSolanaConfigured && !demo.cloudUser) return 'Sign in to rip';
+    return `Rip \u00b7 \u25ce ${activePack?.price.toFixed(2) ?? '\u2014'}`;
+  }
+
+  function onCta() {
+    if (!activePack) return;
+    if (isSolanaConfigured && !connected) {
+      setError('Use Connect in the top bar to link Phantom or Solflare.');
+      return;
+    }
+    if (isSolanaConfigured && !demo.cloudUser) {
+      setError('Sign in with email so we can save your pulls.');
+      return;
+    }
+    setOpening(activePack);
+  }
+
+  return (
+    <div className="rips-app">
+      <header className="rips-top">
+        <a
+          className="rips-brand"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            setPage('shop');
+          }}
+        >
+          <span className="rips-mark">R</span>
+          <span>
+            <b>RIPS</b>
+            <small>Solana packs</small>
+          </span>
+        </a>
+        <div className="rips-top-actions">
+          <WalletBar />
+          <AccountPanel />
+        </div>
+      </header>
+
+      {payStatus && (
+        <div className="banner info" role="status">
+          {payStatus}
+        </div>
+      )}
+      {error && (
+        <div className="banner error" role="alert">
+          {error}
+          <button aria-label="Dismiss" onClick={() => setError('')}>
+            \u00d7
+          </button>
+        </div>
+      )}
+
+      {page === 'shop' && activePack && (
+        <section className="shop-stage">
+          <div className="pack-carousel">
+            <div className="pack-art" style={{ ['--pack-accent' as string]: activePack.accent }}>
+              <div className="pack-art-brand">RIPS \u00b7 SOLANA</div>
+              <div className="pack-art-title">{activePack.name.replace(/ Pack$/i, '')}</div>
+              <div className="pack-art-glyph">
+                <Sparkles size={28} />
+              </div>
+              <div className="pack-art-label">{activePack.name.toUpperCase()}</div>
+            </div>
+          </div>
+
+          <div className="pack-nav" aria-hidden>
+            {catalogPacks.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                className={'pack-dot' + (i === activePackIdx ? ' on' : '')}
+                onClick={() => setActivePackIdx(i)}
+              />
+            ))}
+          </div>
+
+          <div className="pack-meta">
+            <h1>{activePack.name}</h1>
+            <p>{activePack.subtitle}</p>
+            <div className="odds-chip">
+              {(['Common', 'Rare', 'Epic', 'Legendary'] as const).map((r) => (
+                <span key={r}>
+                  {r}
+                  <b>{activePack.odds[r]}%</b>
+                </span>
+              ))}
+            </div>
+            <div className="prize-row">
+              <span>
+                Price
+                <br />
+                <strong>\u25ce {activePack.price.toFixed(2)}</strong>
+              </span>
+              <span style={{ textAlign: 'right' }}>
+                Network
+                <br />
+                <strong>Solana</strong>
+              </span>
+            </div>
+            <button className="cta-primary" disabled={Boolean(payStatus)} onClick={onCta}>
+              <Wallet size={18} />
+              {ctaLabel()}
+            </button>
+            <button className="cta-secondary" type="button" onClick={() => setPage('how')}>
+              How ripping works
+            </button>
+          </div>
+
+          <div className="pack-switcher" role="tablist" aria-label="Packs">
+            {catalogPacks.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                role="tab"
+                aria-selected={i === activePackIdx}
+                className={'pack-pill' + (i === activePackIdx ? ' on' : '')}
+                onClick={() => setActivePackIdx(i)}
+              >
+                {p.name.replace(/ Pack$/i, '')} \u00b7 \u25ce{p.price}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {page === 'inventory' && (
+        <div className="page">
+          <div className="page-title">
+            <h1>Your vault</h1>
+            <p>Pulls saved after verified SOL payments.</p>
+          </div>
+          <div className="stats-row">
+            <div className="stat-card">
+              <small>ITEMS</small>
+              <strong>{demo.inventory.length}</strong>
+            </div>
+            <div className="stat-card">
+              <small>UNIQUE</small>
+              <strong>{new Set(demo.inventory.map((r) => r.token.ticker)).size}</strong>
+            </div>
+            <div className="stat-card">
+              <small>EST. VALUE</small>
+              <strong>\u25ce {total.toFixed(2)}</strong>
+            </div>
+            <div className="stat-card">
+              <small>LEGENDARY</small>
+              <strong>{demo.inventory.filter((r) => r.token.rarity === 'Legendary').length}</strong>
+            </div>
+          </div>
+          <Achievements inventory={demo.inventory} history={demo.history} />
+          {demo.inventory.length === 0 ? (
+            <div className="empty">
+              <Coins size={28} />
+              <h2>Vault is empty</h2>
+              <p>Rip a pack to start your collection.</p>
+              <button className="cta-primary" style={{ marginTop: 16, maxWidth: 240 }} onClick={() => setPage('shop')}>
+                Open shop
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="inventory-toolbar">
+                <button type="button" className="btn-ghost" onClick={exportCsv}>
+                  Export CSV
+                </button>
+                <label className="search-field">
+                  <Search size={14} />
+                  <input
+                    placeholder="Search\u2026"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && (
+                    <button type="button" aria-label="Clear" onClick={() => setSearchTerm('')}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </label>
+                <label className="filter-field">
+                  <select
+                    aria-label="Filter by rarity"
+                    value={rarityFilter}
+                    onChange={(e) => setRarityFilter(e.target.value)}
+                  >
+                    <option>All</option>
+                    <option>Common</option>
+                    <option>Rare</option>
+                    <option>Epic</option>
+                    <option>Legendary</option>
+                  </select>
+                </label>
+                <label className="filter-field">
+                  <select
+                    aria-label="Sort"
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value)}
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="value-high">Value high</option>
+                    <option value="value-low">Value low</option>
+                    <option value="name">Name</option>
+                  </select>
+                </label>
+              </div>
+              <div className="collection">
+                {visibleInventory.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className="token-card-button"
+                    onClick={() => setSelectedRip(r)}
+                  >
+                    <div
+                      className="token-art"
+                      style={{ ['--token-color' as string]: r.token.color }}
+                    >
+                      {r.token.icon}
+                    </div>
+                    <div className="token-info">
+                      <small className="rarity">{r.token.rarity}</small>
+                      <h3>{r.token.name}</h3>
+                      <p>
+                        ${r.token.ticker} \u00b7 {r.packName}
+                      </p>
+                      <strong>\u25ce {r.token.demoValue.toFixed(2)}</strong>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <h2 style={{ fontSize: 15, marginTop: 24 }}>Activity</h2>
+              {demo.history.map((r) => (
+                <div className="history" key={r.id}>
+                  <span>{r.token.icon}</span>
+                  <div>
+                    <b>{r.packName}</b>
+                    <div style={{ color: 'var(--dim)', fontSize: 12 }}>
+                      {r.token.name} \u00b7 {new Date(r.openedAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <strong>+\u25ce {r.token.demoValue.toFixed(2)}</strong>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {page === 'leaderboard' && (
+        <div className="page">
+          <LeaderboardPage
+            rips={demo.history.length}
+            value={total}
+            signedIn={Boolean(demo.cloudUser)}
+          />
+        </div>
+      )}
+
+      {page === 'how' && (
+        <div className="page">
+          <div className="page-title">
+            <h1>How it works</h1>
+            <p>Real SOL on Solana \u2014 no fake balances.</p>
+          </div>
+          <div className="how-grid">
+            <article>
+              <Check size={18} color="#22d3ee" />
+              <h3>1. Sign in + connect</h3>
+              <p>Magic link saves your vault. Wallet pays for packs.</p>
+            </article>
+            <article>
+              <Check size={18} color="#22d3ee" />
+              <h3>2. Pay in SOL</h3>
+              <p>Ripping sends SOL to the treasury. You approve in your wallet.</p>
+            </article>
+            <article>
+              <Check size={18} color="#22d3ee" />
+              <h3>3. Server verifies</h3>
+              <p>We confirm the transfer on-chain, then roll rarity into your vault.</p>
+            </article>
+            <article>
+              <Check size={18} color="#22d3ee" />
+              <h3>4. Collect</h3>
+              <p>Items live in your account. On-chain mint can land in a later drop.</p>
+            </article>
+          </div>
+        </div>
+      )}
+
+      <nav className="rips-dock" aria-label="Primary">
+        {DOCK.map((d) => (
+          <button
+            key={d.id}
+            type="button"
+            className={'dock-item' + (page === d.id ? ' on' : '')}
+            onClick={() => setPage(d.id)}
+          >
+            <d.icon size={20} />
+            {d.label}
+          </button>
+        ))}
+      </nav>
+
+      {opening && (
+        <div
+          className="overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpening(null);
+          }}
+        >
+          <section className="modal" role="dialog" aria-modal="true">
+            <button className="close" aria-label="Close" onClick={() => setOpening(null)}>
+              \u00d7
+            </button>
+            <small className="rarity">Open pack</small>
+            <h2>{opening.name}</h2>
+            <p>{opening.subtitle}</p>
+            <ul className="odds dense">
+              {(['Common', 'Rare', 'Epic', 'Legendary'] as const).map((r) => (
+                <li key={r}>
+                  <span>{r}</span>
+                  <b>{opening.odds[r]}%</b>
+                </li>
+              ))}
+            </ul>
+            <p className="cost">
+              Cost <strong>\u25ce {opening.price.toFixed(2)} SOL</strong>
+            </p>
+            <div className="actions">
+              <button className="secondary" type="button" onClick={() => setOpening(null)}>
+                Cancel
+              </button>
+              <button
+                className="primary"
+                type="button"
+                disabled={Boolean(payStatus)}
+                onClick={() => rip(opening)}
+              >
+                {payStatus ? 'Working\u2026' : 'Pay & rip'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {reward && (
+        <div
+          className="overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setReward(null);
+          }}
+        >
+          <section className="modal" role="dialog" aria-modal="true">
+            <button className="close" aria-label="Close" onClick={() => setReward(null)}>
+              \u00d7
+            </button>
+            <small className="rarity">You pulled</small>
+            <div
+              className="reward-art"
+              style={{ ['--token-color' as string]: reward.token.color }}
+            >
+              {reward.token.icon}
+            </div>
+            <small className="rarity">{reward.token.rarity}</small>
+            <h2>{reward.token.name}</h2>
+            <p>
+              ${reward.token.ticker} \u00b7 {reward.packName}
+            </p>
+            <button className="cta-primary" style={{ marginTop: 16 }} onClick={() => setReward(null)}>
+              Nice
+            </button>
+          </section>
+        </div>
+      )}
+
+      {selectedRip && (
+        <div
+          className="overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedRip(null);
+          }}
+        >
+          <section className="modal" role="dialog" aria-modal="true">
+            <button className="close" aria-label="Close" onClick={() => setSelectedRip(null)}>
+              \u00d7
+            </button>
+            <div
+              className="reward-art"
+              style={{ ['--token-color' as string]: selectedRip.token.color }}
+            >
+              {selectedRip.token.icon}
+            </div>
+            <small className="rarity">{selectedRip.token.rarity}</small>
+            <h2>{selectedRip.token.name}</h2>
+            <p>${selectedRip.token.ticker}</p>
+            <button
+              className="cta-primary"
+              style={{ marginTop: 16 }}
+              onClick={() => setSelectedRip(null)}
+            >
+              Done
+            </button>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
